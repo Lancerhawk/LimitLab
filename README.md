@@ -1,4 +1,10 @@
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=800&size=40&duration=3000&pause=1000&color=3B82F6&center=true&vCenter=true&width=800&height=100&lines=LimitLab;Under+Construction...;Real-Time+Rate+Limiting" alt="Animated Typing SVG" />
+</p>
+
 # LimitLab
+
+> 🚧 **Under Construction:** LimitLab is currently in active development. Features, database architecture, and APIs are actively being built and are subject to change. 🚧
 
 Real-Time Rate Limiting Playground.
 
