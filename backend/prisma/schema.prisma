@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum RateLimitAlgorithm {
+  TOKEN_BUCKET
+  FIXED_WINDOW
+  SLIDING_WINDOW
+}
+
+enum RequestDecision {
+  ALLOW
+  DENY
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  name        String
+  apiKey      String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  configuration RateLimitConfiguration?
+  bucketState   BucketState?
+  windowState   WindowState?
+  statistics    ClientStatistics?
+  requestLogs   RequestLog[]
+
+  @@map("clients")
+}
+
+model RateLimitConfiguration {
+  id                 String             @id @default(uuid())
+  clientId           String             @unique
+  algorithm          RateLimitAlgorithm
+  
+  // Generic limit per second (often used across algorithms)
+  requestsPerSecond  Int                @default(10)
+  
+  // Specific to Token Bucket
+  burstSize          Int?
+  refillRate         Float?
+  
+  // Specific to Fixed/Sliding Window (in milliseconds)
+  windowDurationMs   Int?
+
+  isEnabled          Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("rate_limit_configurations")
+}
+
+model BucketState {
+  id              String   @id @default(uuid())
+  clientId        String   @unique
+  remainingTokens Float
+  lastRefillTime  DateTime @default(now())
+  currentCapacity Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("bucket_states")
+}
+
+model WindowState {
+  id            String   @id @default(uuid())
+  clientId      String   @unique
+  currentWindow BigInt   // Representing window start time in ms
+  requestCount  Int      @default(0)
+  resetTime     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("window_states")
+}
+
+model ClientStatistics {
+  id               String   @id @default(uuid())
+  clientId         String   @unique
+  totalRequests    BigInt   @default(0)
+  allowedRequests  BigInt   @default(0)
+  deniedRequests   BigInt   @default(0)
+  averageLatencyMs Float    @default(0.0)
+  lastRequestTime  DateTime?
+  currentRps       Float    @default(0.0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_statistics")
+}
+
+model RequestLog {
+  id              String          @id @default(uuid())
+  clientId        String
+  requestId       String          @unique
+  timestamp       DateTime        @default(now())
+  algorithm       RateLimitAlgorithm
+  decision        RequestDecision
+  latencyMs       Float
+  remainingTokens Float?
+  retryAfterMs    Int?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Composite index for time-series aggregation per client
+  @@index([clientId, timestamp])
+  @@map("request_logs")
+}
