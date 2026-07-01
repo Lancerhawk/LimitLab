@@ -1,0 +1,69 @@
+# Changelog
+
+All notable changes to LimitLab will be documented in this file.
+
+## [0.4.0] - 2026-07-01
+### Added
+- Implemented a production-grade PostgreSQL-backed Token Bucket rate limiter with continuous fractional refill calculations
+- Added Optimistic Concurrency Control (OCC) using atomic SQL updates to safely handle concurrent requests
+- Introduced state-recalculation retry loop to eliminate stale bucket calculations during write conflicts
+- Implemented zero-write optimization for denied requests to avoid unnecessary database writes
+- Added monotonic version timestamps for deterministic OCC conflict detection
+- Improved concurrency handling with configurable jittered retry strategy
+- Captured immutable request arrival timestamps for mathematically consistent token calculations
+- Preserved fractional token precision while exposing rounded values to API consumers
+- Added configurable MAX_OCC_ATTEMPTS and latency instrumentation through environment configuration
+- Instrumented database operations with optional per-query timing and request performance metrics
+- Parallelized asynchronous request logging and statistics updates for improved throughput
+- Added production-grade request summaries including latency and OCC retry metrics
+- Implemented backend validation for playground request limits and delay boundaries
+- Built a dedicated in-memory Token Bucket implementation for high-performance rate limiting
+- Reused the same Token Bucket algorithm across both database-backed and in-memory storage backends
+- Added automatic bucket creation and idle bucket expiration for the in-memory implementation
+- Replaced unbounded bucket storage with a bounded LRU cache to prevent memory exhaustion attacks
+- Added standard HTTP rate-limiting headers including Retry-After and X-RateLimit-Reset
+- Implemented precise retry timing calculations for denied requests based on refill rate
+- Created a dedicated in-memory rate-limiting endpoint for production-style load testing
+- Developed a comprehensive TypeScript load-testing framework covering simultaneous, sequential, burst, and sustained traffic scenarios
+- Added automated validation for expected allow/deny behavior across multiple Token Bucket configurations
+- Improved documentation explaining PostgreSQL-backed versus in-memory Token Bucket architectures
+- Added extensive inline documentation describing concurrency model, algorithm flow, and architectural decisions
+- Hardened the implementation against race conditions, excessive memory growth, and production edge cases
+- Verified mathematical correctness, concurrency safety, and production behavior through comprehensive load testing
+
+## [0.3.0] - 2026-07-01
+### Added
+- Scaffolded robust React/Vite/TypeScript frontend structure with Tailwind CSS.
+- Established global routing architecture mapping out Dashboard, Clients, Simulator, Comparison, Analytics, and Settings interfaces.
+- Implemented responsive `AppLayout` featuring a fully collapsible side navigation and mobile-optimized top bar.
+- Developed highly reusable, accessible UI primitives including custom `Button`, `Card`, `Badge`, and `Input` components.
+- Designed premium data visualization placeholders using custom section wrappers with subtle gradients and pixel-perfect padding.
+- Integrated Lucide icons for intuitive navigation and empty-state messaging.
+
+### Changed
+- Refined component structures to strictly separate layout logic from presentation, ensuring high scalability for future algorithmic integrations.
+- Purged unused dependencies, legacy imports, and consolidated Tailwind class merging logic.
+
+## [0.2.1] - 2026-07-01
+### Changed
+- Replaced the static image with a dynamic, animated GitHub typing SVG to indicate the project is under construction.
+
+## [0.2.0] - 2026-07-01
+### Added
+- Implemented the complete relational database architecture for LimitLab using Prisma ORM.
+- Defined models for `Client`, `RateLimitConfiguration`, `BucketState`, `WindowState`, `ClientStatistics`, and `RequestLog`.
+- Added Enums for `RateLimitAlgorithm` and `RequestDecision`.
+- Configured Supabase connection string handling for PgBouncer and Direct connections.
+- Generated Prisma client and ran initial migration.
+
+## [0.1.0] - 2026-06-30
+### Added
+- Initialized the foundational monorepo structure for LimitLab, establishing both the backend API and the frontend React application.
+- Initialized Node.js/Express server with TypeScript, Pino logging, CORS, Helmet, and Morgan.
+- Set up Prisma ORM initialization and environment validation via Zod.
+- Scaffolded a scalable backend directory structure (controllers, routes, services, algorithms, socket).
+- Implemented basic `/health` check endpoint.
+- Initialized React application with Vite, TypeScript, and Tailwind CSS v4.
+- Set up React Router and established the `MainLayout` and `HomePage`.
+- Configured ESLint and Prettier across frontend and backend for consistency.
+- Created root `.gitignore`, `README.md`, and `LICENSE`.

@@ -7,6 +7,11 @@ import morgan from 'morgan';
 import { env } from './config/env';
 import { logger } from './config/logger';
 
+// Patch BigInt serialization for JSON
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -42,10 +47,19 @@ io.on('connection', (socket) => {
   });
 });
 
+import clientRoutes from './routes/client.routes';
+import rateLimitRoutes from './routes/rateLimit.routes';
+import dashboardRoutes from './routes/dashboard.routes';
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// API Routes
+app.use('/api/v1/clients', clientRoutes);
+app.use('/api/v1/rate-limit', rateLimitRoutes);
+app.use('/api/v1/stats/dashboard', dashboardRoutes);
 
 // Start server
 httpServer.listen(env.PORT, () => {

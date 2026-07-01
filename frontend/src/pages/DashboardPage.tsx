@@ -1,8 +1,31 @@
+import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatCard } from '../components/common/StatCard';
 import { Activity, Users, Zap, ShieldCheck, AreaChart, Cpu } from 'lucide-react';
+import { getDashboardStats, type DashboardStats } from '../api/dashboard';
 
 export const DashboardPage = () => {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await getDashboardStats();
+        setStats(data);
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchStats();
+    // In a real app we might poll here, but for now we just fetch on mount
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="space-y-8">
       <PageHeader 
@@ -12,10 +35,27 @@ export const DashboardPage = () => {
 
       {/* Primary Stats */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total Requests" value="---" icon={<Activity className="h-4 w-4" />} />
-        <StatCard title="Active Clients" value="---" icon={<Users className="h-4 w-4" />} />
-        <StatCard title="Blocked Requests" value="---" icon={<ShieldCheck className="h-4 w-4" />} />
-        <StatCard title="Avg Latency" value="---" icon={<Zap className="h-4 w-4" />} />
+        <StatCard 
+          title="Total Requests" 
+          value={loading ? "..." : stats?.totalRequests || "0"} 
+          icon={<Activity className="h-4 w-4" />} 
+        />
+        <StatCard 
+          title="Active Clients" 
+          value={loading ? "..." : stats?.activeClients?.toString() || "0"} 
+          icon={<Users className="h-4 w-4" />} 
+          description={stats ? `${stats.totalClients} total configured` : undefined}
+        />
+        <StatCard 
+          title="Blocked Requests" 
+          value={loading ? "..." : stats?.deniedRequests || "0"} 
+          icon={<ShieldCheck className="h-4 w-4" />} 
+        />
+        <StatCard 
+          title="Allowed Requests" 
+          value={loading ? "..." : stats?.allowedRequests || "0"} 
+          icon={<Zap className="h-4 w-4" />} 
+        />
       </div>
 
       {/* Main Sections - Completely Rebuilt for Ultra-Premium UI */}
