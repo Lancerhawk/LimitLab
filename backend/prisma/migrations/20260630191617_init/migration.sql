@@ -1,10 +1,7 @@
--- CreateEnum
 CREATE TYPE "RateLimitAlgorithm" AS ENUM ('TOKEN_BUCKET', 'FIXED_WINDOW', 'SLIDING_WINDOW');
 
--- CreateEnum
 CREATE TYPE "RequestDecision" AS ENUM ('ALLOW', 'DENY');
 
--- CreateTable
 CREATE TABLE "clients" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -17,7 +14,6 @@ CREATE TABLE "clients" (
     CONSTRAINT "clients_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "rate_limit_configurations" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
@@ -33,7 +29,6 @@ CREATE TABLE "rate_limit_configurations" (
     CONSTRAINT "rate_limit_configurations_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "bucket_states" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
@@ -46,7 +41,6 @@ CREATE TABLE "bucket_states" (
     CONSTRAINT "bucket_states_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "window_states" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
@@ -59,7 +53,6 @@ CREATE TABLE "window_states" (
     CONSTRAINT "window_states_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "client_statistics" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
@@ -75,7 +68,6 @@ CREATE TABLE "client_statistics" (
     CONSTRAINT "client_statistics_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "request_logs" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
@@ -90,38 +82,26 @@ CREATE TABLE "request_logs" (
     CONSTRAINT "request_logs_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
 CREATE UNIQUE INDEX "clients_apiKey_key" ON "clients"("apiKey");
 
--- CreateIndex
 CREATE UNIQUE INDEX "rate_limit_configurations_clientId_key" ON "rate_limit_configurations"("clientId");
 
--- CreateIndex
 CREATE UNIQUE INDEX "bucket_states_clientId_key" ON "bucket_states"("clientId");
 
--- CreateIndex
 CREATE UNIQUE INDEX "window_states_clientId_key" ON "window_states"("clientId");
 
--- CreateIndex
 CREATE UNIQUE INDEX "client_statistics_clientId_key" ON "client_statistics"("clientId");
 
--- CreateIndex
 CREATE UNIQUE INDEX "request_logs_requestId_key" ON "request_logs"("requestId");
 
--- CreateIndex
 CREATE INDEX "request_logs_clientId_timestamp_idx" ON "request_logs"("clientId", "timestamp");
 
--- AddForeignKey
 ALTER TABLE "rate_limit_configurations" ADD CONSTRAINT "rate_limit_configurations_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "bucket_states" ADD CONSTRAINT "bucket_states_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "window_states" ADD CONSTRAINT "window_states_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "client_statistics" ADD CONSTRAINT "client_statistics_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "request_logs" ADD CONSTRAINT "request_logs_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
