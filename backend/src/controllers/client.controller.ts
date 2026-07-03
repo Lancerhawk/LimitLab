@@ -5,15 +5,28 @@ import { z } from 'zod';
 const CreateClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  capacity: z.number().int().positive('Capacity must be positive').default(10),
-  refillRate: z.number().positive('Refill rate must be positive').default(1),
-});
+  algorithm: z.enum(['TOKEN_BUCKET', 'FIXED_WINDOW']).default('TOKEN_BUCKET'),
+  capacity: z.number().int().positive('Capacity must be positive').optional(),
+  refillRate: z.number().positive('Refill rate must be positive').optional(),
+  windowDurationMs: z.number().int().positive('Window duration must be positive').optional(),
+  requestLimit: z.number().int().positive('Request limit must be positive').optional(),
+}).refine((data) => {
+  if (data.algorithm === 'TOKEN_BUCKET') {
+    return (data.capacity ?? 10) > 0 && (data.refillRate ?? 1) > 0;
+  }
+  if (data.algorithm === 'FIXED_WINDOW') {
+    return (data.windowDurationMs ?? 60000) > 0 && (data.requestLimit ?? 10) > 0;
+  }
+  return true;
+}, { message: 'Invalid algorithm configuration' });
 
 const UpdateClientSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   capacity: z.number().int().positive().optional(),
   refillRate: z.number().positive().optional(),
+  windowDurationMs: z.number().int().positive().optional(),
+  requestLimit: z.number().int().positive().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -77,3 +90,4 @@ export class ClientController {
     }
   }
 }
+

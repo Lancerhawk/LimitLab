@@ -8,6 +8,7 @@ export class ClientService {
       include: {
         configuration: true,
         bucketState: true,
+        windowState: true,
         statistics: true,
       },
       orderBy: { createdAt: 'desc' }
@@ -20,14 +21,24 @@ export class ClientService {
       include: {
         configuration: true,
         bucketState: true,
+        windowState: true,
         statistics: true,
       }
     });
   }
 
-  static async createClient(data: { name: string, description?: string, capacity: number, refillRate: number }) {
+  static async createClient(data: {
+    name: string;
+    description?: string;
+    algorithm?: string;
+    capacity?: number;
+    refillRate?: number;
+    windowDurationMs?: number;
+    requestLimit?: number;
+  }) {
     const apiKey = 'pk_test_' + randomBytes(16).toString('hex');
-    
+    const algorithm = (data.algorithm as RateLimitAlgorithm) || RateLimitAlgorithm.TOKEN_BUCKET;
+
     return prisma.$transaction(async (tx) => {
       const client = await tx.client.create({
         data: {
@@ -37,22 +48,52 @@ export class ClientService {
         }
       });
 
-      await tx.rateLimitConfiguration.create({
-        data: {
-          clientId: client.id,
-          algorithm: RateLimitAlgorithm.TOKEN_BUCKET,
-          burstSize: data.capacity,
-          refillRate: data.refillRate,
-        }
-      });
+      if (algorithm === RateLimitAlgorithm.TOKEN_BUCKET) {
+        const capacity = data.capacity ?? 10;
+        const refillRate = data.refillRate ?? 1;
 
-      await tx.bucketState.create({
-        data: {
-          clientId: client.id,
-          remainingTokens: data.capacity,
-          currentCapacity: data.capacity,
-        }
-      });
+        await tx.rateLimitConfiguration.create({
+          data: {
+            clientId: client.id,
+            algorithm: RateLimitAlgorithm.TOKEN_BUCKET,
+            burstSize: capacity,
+            refillRate: refillRate,
+          }
+        });
+
+        await tx.bucketState.create({
+          data: {
+            clientId: client.id,
+            remainingTokens: capacity,
+            currentCapacity: capacity,
+          }
+        });
+      } else if (algorithm === RateLimitAlgorithm.FIXED_WINDOW) {
+        const windowDurationMs = data.windowDurationMs ?? 60000;
+        const requestLimit = data.requestLimit ?? 10;
+
+        await tx.rateLimitConfiguration.create({
+          data: {
+            clientId: client.id,
+            algorithm: RateLimitAlgorithm.FIXED_WINDOW,
+            requestsPerSecond: requestLimit,
+            windowDurationMs: windowDurationMs,
+          }
+        });
+
+        const now = new Date();
+        const windowStart = Math.floor(now.getTime() / windowDurationMs) * windowDurationMs;
+        const resetTime = new Date(windowStart + windowDurationMs);
+
+        await tx.windowState.create({
+          data: {
+            clientId: client.id,
+            currentWindow: BigInt(windowStart),
+            requestCount: 0,
+            resetTime: resetTime,
+          }
+        });
+      }
 
       await tx.clientStatistics.create({
         data: {
@@ -60,11 +101,22 @@ export class ClientService {
         }
       });
 
-      return client;
+      return tx.client.findUnique({
+        where: { id: client.id },
+        include: { configuration: true, bucketState: true, windowState: true, statistics: true }
+      });
     });
   }
 
-  static async updateClient(id: string, data: { name?: string, description?: string, capacity?: number, refillRate?: number, isActive?: boolean }) {
+  static async updateClient(id: string, data: {
+    name?: string;
+    description?: string;
+    capacity?: number;
+    refillRate?: number;
+    windowDurationMs?: number;
+    requestLimit?: number;
+    isActive?: boolean;
+  }) {
     return prisma.$transaction(async (tx) => {
       if (data.name !== undefined || data.description !== undefined || data.isActive !== undefined) {
         await tx.client.update({
@@ -77,32 +129,46 @@ export class ClientService {
         });
       }
 
-      if (data.capacity !== undefined || data.refillRate !== undefined) {
-        const config = await tx.rateLimitConfiguration.update({
-          where: { clientId: id },
-          data: {
-            burstSize: data.capacity,
-            refillRate: data.refillRate,
+      const config = await tx.rateLimitConfiguration.findUnique({ where: { clientId: id } });
+
+      if (config?.algorithm === RateLimitAlgorithm.TOKEN_BUCKET) {
+        if (data.capacity !== undefined || data.refillRate !== undefined) {
+          await tx.rateLimitConfiguration.update({
+            where: { clientId: id },
+            data: {
+              burstSize: data.capacity,
+              refillRate: data.refillRate,
+            }
+          });
+
+          if (data.capacity !== undefined) {
+            const state = await tx.bucketState.findUnique({ where: { clientId: id } });
+            if (state) {
+              await tx.bucketState.update({
+                where: { clientId: id },
+                data: {
+                  currentCapacity: data.capacity,
+                  remainingTokens: Math.min(state.remainingTokens, data.capacity)
+                }
+              });
+            }
           }
-        });
-        
-        if (data.capacity !== undefined) {
-          const state = await tx.bucketState.findUnique({ where: { clientId: id } });
-          if (state) {
-            await tx.bucketState.update({
-              where: { clientId: id },
-              data: {
-                currentCapacity: data.capacity,
-                remainingTokens: Math.min(state.remainingTokens, data.capacity)
-              }
-            });
-          }
+        }
+      } else if (config?.algorithm === RateLimitAlgorithm.FIXED_WINDOW) {
+        if (data.windowDurationMs !== undefined || data.requestLimit !== undefined) {
+          await tx.rateLimitConfiguration.update({
+            where: { clientId: id },
+            data: {
+              windowDurationMs: data.windowDurationMs,
+              requestsPerSecond: data.requestLimit,
+            }
+          });
         }
       }
 
       return tx.client.findUnique({
         where: { id },
-        include: { configuration: true, bucketState: true }
+        include: { configuration: true, bucketState: true, windowState: true }
       });
     });
   }
@@ -113,3 +179,4 @@ export class ClientService {
     });
   }
 }
+

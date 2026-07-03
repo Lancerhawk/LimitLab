@@ -2,6 +2,23 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [0.5.0] - 2026-07-03
+### Added
+- Designed and implemented a production-grade PostgreSQL-backed Fixed Window rate limiter
+- Created robust `windowState` Prisma schema extensions to track `currentWindow`, `requestCount`, and `resetTime`
+- Applied Optimistic Concurrency Control (OCC) via atomic SQL updates to ensure strict concurrency safety for Fixed Window states
+- Engineered robust state-recalculation retry loops to completely prevent request count over-increments during race conditions
+- Implemented absolute system clock boundary calculations to ensure globally synchronized and exact window resets
+- Added zero-write optimizations for Fixed Window requests that are denied due to an exhausted capacity
+- Built a dedicated high-performance in-memory Fixed Window algorithm utilizing LRU caching for isolated load testing
+- Integrated standard HTTP rate-limiting headers specifically for Fixed Window (e.g., `X-RateLimit-Reset` yielding precise Unix timestamps)
+- Re-architected backend test routing to securely segregate in-memory Token Bucket and Fixed Window endpoints via `req.ip`
+- Created dynamic UI visualizers in the dashboard specifically tailored to Fixed Window's absolute time horizon semantics
+- Resolved a stale frontend state issue where long-lived browser sessions incorrectly calculated remaining capacity boundaries
+- Developed an authentic `fixedWindowLoadTest.ts` framework simulating sustained single-client capacity limits across multiple clock epochs
+- Added standalone downloadable `Node.js`, `Python`, and `Bash` test scripts in the UI for both algorithms
+- Architected dynamic script generation to inject algorithm-specific wait times (12s for Token Bucket refills, 61s for Fixed Window resets)
+
 ## [0.4.0] - 2026-07-01
 ### Added
 - Implemented a production-grade PostgreSQL-backed Token Bucket rate limiter with continuous fractional refill calculations

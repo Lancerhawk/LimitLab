@@ -1,12 +1,12 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/common/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { getClientById, type Client } from '../api/clients';
-import { evaluateRateLimit } from '../api/rateLimit';
-import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code } from 'lucide-react';
+import { evaluateRateLimit, evaluateFixedWindowRateLimit } from '../api/rateLimit';
+import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface RequestLog {
@@ -21,11 +21,11 @@ interface RequestLog {
 const ClientDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  
+
   // Playground State
   const [requestCount, setRequestCount] = useState<number | string>(1);
   const [delayMs, setDelayMs] = useState<number | string>(600);
@@ -33,9 +33,7 @@ const ClientDetailsPage = () => {
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [sessionStats, setSessionStats] = useState({ total: 0, allowed: 0, denied: 0 });
   const [liveTokens, setLiveTokens] = useState<number>(0);
-  
-  // Ref for auto-scrolling
-  const logsEndRef = useRef<HTMLDivElement>(null);
+
 
   const fetchClient = async () => {
     if (!id) return;
@@ -57,34 +55,58 @@ const ClientDetailsPage = () => {
   }, [id]);
 
   useEffect(() => {
-    // Auto-scroll logs
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs]);
+    fetchClient();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-  // Smart Live Visualizer Engine
+  const isFixedWindow = client?.configuration?.algorithm === 'FIXED_WINDOW';
+
   useEffect(() => {
-    if (!client?.bucketState || !client?.configuration) return;
-    
+    if (!client?.configuration) return;
+
+    if (isFixedWindow) {
+      const limit = client.configuration!.requestsPerSecond ?? 10;
+
+      const calculateFixedWindowTokens = () => {
+        if (!client.windowState?.resetTime) return Math.max(0, limit - (client.windowState?.requestCount ?? 0));
+
+        const resetTimeMs = new Date(client.windowState.resetTime).getTime();
+        if (Date.now() >= resetTimeMs) {
+          return limit; // Window has passed, tokens are reset
+        }
+
+        return Math.max(0, limit - (client.windowState.requestCount ?? 0));
+      };
+
+      setLiveTokens(calculateFixedWindowTokens());
+
+      const interval = setInterval(() => {
+        setLiveTokens(calculateFixedWindowTokens());
+      }, 1000); // Check every second to see if window expired
+
+      return () => clearInterval(interval);
+    }
+
+    if (!client?.bucketState) return;
+
     const calculateLiveTokens = () => {
       const capacity = client.configuration!.burstSize ?? 10;
       const refillRate = client.configuration!.refillRate ?? 1;
       const remainingTokens = client.bucketState!.remainingTokens;
       const lastRefillTime = new Date(client.bucketState!.lastRefillTime);
-      
+
       const elapsedMs = Math.max(0, Date.now() - lastRefillTime.getTime());
       const elapsedSeconds = elapsedMs / 1000;
-      
+
       return Math.min(capacity, remainingTokens + (elapsedSeconds * refillRate));
     };
 
     setLiveTokens(calculateLiveTokens());
-    
+
     const interval = setInterval(() => {
       setLiveTokens(calculateLiveTokens());
-    }, 50); // 20fps animation
-    
+    }, 50);
+
     return () => clearInterval(interval);
   }, [client]);
 
@@ -98,8 +120,13 @@ const ClientDetailsPage = () => {
 
   const downloadScript = (language: 'node' | 'python' | 'bash') => {
     if (!client) return;
+
+    const endpoint = isFixedWindow
+      ? 'http://localhost:3001/api/v1/rate-limit/fixed-window/memory'
+      : 'http://localhost:3001/api/v1/rate-limit/memory';
+    const waitS = isFixedWindow ? 61 : 12;
+    const waitMsg = isFixedWindow ? 'for window to reset' : 'for refill';
     
-    const endpoint = 'http://localhost:3001/api/v1/rate-limit/memory';
     let content = '';
     let filename = '';
 
@@ -147,16 +174,16 @@ async function run() {
   console.log(\`Starting tests against \${ENDPOINT}...\\n\`);
 
   printResults("TEST 1: 10 Simultaneous", await runSimultaneous(10));
-  console.log("Waiting 12s for refill...");
-  await new Promise(r => setTimeout(r, 12000));
+  console.log("Waiting ${waitS}s ${waitMsg}...");
+  await new Promise(r => setTimeout(r, ${waitS * 1000}));
 
   printResults("TEST 2: 11 Simultaneous", await runSimultaneous(11));
-  console.log("Waiting 12s for refill...");
-  await new Promise(r => setTimeout(r, 12000));
+  console.log("Waiting ${waitS}s ${waitMsg}...");
+  await new Promise(r => setTimeout(r, ${waitS * 1000}));
 
   printResults("TEST 3: 20 Simultaneous", await runSimultaneous(20));
-  console.log("Waiting 12s for refill...");
-  await new Promise(r => setTimeout(r, 12000));
+  console.log("Waiting ${waitS}s ${waitMsg}...");
+  await new Promise(r => setTimeout(r, ${waitS * 1000}));
 
   printResults("TEST 4: 15 Sequential (100ms delay)", await runSequential(15, 100));
 }
@@ -199,16 +226,16 @@ def print_results(name, results):
 print(f"Starting tests against {ENDPOINT}...\\n")
 
 print_results("TEST 1: 10 Simultaneous", run_simultaneous(10))
-print("Waiting 12s for refill...")
-time.sleep(12)
+print("Waiting ${waitS}s ${waitMsg}...")
+time.sleep(${waitS})
 
 print_results("TEST 2: 11 Simultaneous", run_simultaneous(11))
-print("Waiting 12s for refill...")
-time.sleep(12)
+print("Waiting ${waitS}s ${waitMsg}...")
+time.sleep(${waitS})
 
 print_results("TEST 3: 20 Simultaneous", run_simultaneous(20))
-print("Waiting 12s for refill...")
-time.sleep(12)
+print("Waiting ${waitS}s ${waitMsg}...")
+time.sleep(${waitS})
 
 print_results("TEST 4: 15 Sequential (100ms delay)", run_sequential(15, 100))
 `;
@@ -238,16 +265,16 @@ run_sequential() {
 }
 
 run_simultaneous 10
-echo "Waiting 12s for refill..."
-sleep 12
+echo -e "\\nWaiting ${waitS}s ${waitMsg}..."
+sleep ${waitS}
 
 run_simultaneous 11
-echo "Waiting 12s for refill..."
-sleep 12
+echo -e "\\nWaiting ${waitS}s ${waitMsg}..."
+sleep ${waitS}
 
 run_simultaneous 20
-echo "Waiting 12s for refill..."
-sleep 12
+echo -e "\\nWaiting ${waitS}s ${waitMsg}..."
+sleep ${waitS}
 
 run_sequential 15
 `;
@@ -268,22 +295,23 @@ run_sequential 15
   const handleExecuteRequests = async (count: number) => {
     if (!client) return;
     setIsExecuting(true);
-    
+
     const safeCount = Math.min(Math.max(1, count), 100);
     const safeDelay = Math.min(Math.max(600, Number(delayMs) || 600), 60000);
-    
+
     const promises = [];
-    
+
     for (let i = 0; i < safeCount; i++) {
       const execute = async () => {
         // Stagger requests exactly by the delay amount, instead of waiting for network roundtrips
         if (safeDelay > 0 && i > 0) {
           await new Promise(resolve => setTimeout(resolve, safeDelay * i));
         }
-        
+
         try {
-          const response = await evaluateRateLimit(client.apiKey, safeCount, safeDelay);
-          
+          const evaluator = isFixedWindow ? evaluateFixedWindowRateLimit : evaluateRateLimit;
+          const response = await evaluator(client.apiKey, safeCount, safeDelay);
+
           const logEntry: RequestLog = {
             id: Math.random().toString(36).substring(7),
             timestamp: new Date(),
@@ -292,21 +320,42 @@ run_sequential 15
             retryAfter: response.retryAfter,
             status: response.decision === 'ALLOW' ? 200 : 429
           };
-          
+
           setLogs(prev => {
             const newLogs = [logEntry, ...prev];
             return newLogs.slice(0, 50); // Keep only last 50
           });
-          
+
           setSessionStats(prev => ({
             total: prev.total + 1,
             allowed: prev.allowed + (response.decision === 'ALLOW' ? 1 : 0),
             denied: prev.denied + (response.decision === 'DENY' ? 1 : 0)
           }));
 
-          // Update local client bucket state for visualization instantly
+          // Update local client state for visualization instantly
           setClient(prev => {
             if (!prev) return prev;
+
+            if (isFixedWindow) {
+              const limit = prev.configuration?.requestsPerSecond ?? 10;
+              const durationMs = prev.configuration?.windowDurationMs ?? 60000;
+
+              // Calculate the correct current window reset time locally
+              const now = Date.now();
+              const currentWindow = Math.floor(now / durationMs);
+              const calculatedResetTime = new Date((currentWindow + 1) * durationMs).toISOString();
+
+              return {
+                ...prev,
+                windowState: {
+                  ...prev.windowState,
+                  requestCount: limit - response.remainingTokens,
+                  currentWindow: currentWindow.toString(),
+                  resetTime: response.resetTimestamp ? new Date(response.resetTimestamp * 1000).toISOString() : calculatedResetTime
+                }
+              };
+            }
+
             return {
               ...prev,
               bucketState: {
@@ -326,12 +375,12 @@ run_sequential 15
             remainingTokens: 0,
             status: error.response?.status || 500
           };
-          
+
           setLogs(prev => {
             const newLogs = [logEntry, ...prev];
             return newLogs.slice(0, 50);
           });
-          
+
           setSessionStats(prev => ({
             total: prev.total + 1,
             allowed: prev.allowed,
@@ -339,10 +388,10 @@ run_sequential 15
           }));
         }
       };
-      
+
       promises.push(execute());
     }
-    
+
     await Promise.all(promises);
     setIsExecuting(false);
   };
@@ -362,8 +411,9 @@ run_sequential 15
     );
   }
 
-  // Calculate visualization bars based on the Smart Live Engine
-  const capacity = client.configuration?.burstSize || 10;
+  const capacity = isFixedWindow
+    ? (client.configuration?.requestsPerSecond || 10)
+    : (client.configuration?.burstSize || 10);
   const currentTokens = Math.floor(liveTokens);
   const percentFull = Math.max(0, Math.min(100, (liveTokens / capacity) * 100));
 
@@ -373,10 +423,10 @@ run_sequential 15
         <Button variant="ghost" size="icon" onClick={() => navigate('/clients')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <PageHeader 
-          title={client.name} 
+        <PageHeader
+          title={client.name}
           description={client.description || 'Client Configuration and Test Playground'}
-          className="pb-0" 
+          className="pb-0"
         />
       </div>
 
@@ -405,26 +455,41 @@ run_sequential 15
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground flex items-center gap-2"><Cpu className="h-4 w-4"/> Capacity</p>
-                  <p className="font-semibold">{capacity} tokens</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground flex items-center gap-2"><Activity className="h-4 w-4"/> Refill Rate</p>
-                  <p className="font-semibold">{client.configuration?.refillRate} / sec</p>
-                </div>
+                {isFixedWindow ? (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2"><Timer className="h-4 w-4" /> Window Duration</p>
+                      <p className="font-semibold">{(client.configuration?.windowDurationMs || 60000) / 1000}s</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2"><Cpu className="h-4 w-4" /> Request Limit</p>
+                      <p className="font-semibold">{client.configuration?.requestsPerSecond} requests</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2"><Cpu className="h-4 w-4" /> Capacity</p>
+                      <p className="font-semibold">{capacity} tokens</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2"><Activity className="h-4 w-4" /> Refill Rate</p>
+                      <p className="font-semibold">{client.configuration?.refillRate} / sec</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-            
+
             <div className="hidden md:block w-px bg-border/50"></div>
-            
+
             <div className="flex-1 space-y-4">
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground flex items-center gap-2"><Clock className="h-4 w-4"/> Created At</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2"><Clock className="h-4 w-4" /> Created At</p>
                 <p className="font-medium text-sm">{new Date(client.createdAt).toLocaleString()}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground flex items-center gap-2"><Zap className="h-4 w-4"/> Last Request</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2"><Zap className="h-4 w-4" /> Last Request</p>
                 <p className="font-medium text-sm">{client.statistics?.lastRequestTime ? new Date(client.statistics.lastRequestTime).toLocaleString() : 'Never'}</p>
               </div>
             </div>
@@ -446,7 +511,7 @@ run_sequential 15
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6 space-y-8">
-          
+
           {/* Info Panel */}
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-blue-500 mb-2 flex items-center gap-2">
@@ -457,17 +522,17 @@ run_sequential 15
                 This playground sends <strong>real HTTP requests</strong> to the backend. Each request travels through your browser, operating system, network stack, Node.js event loop, and database, all of which process work asynchronously. As a result, requests are never guaranteed to arrive at the backend at the exact same instant, regardless of the configured delay.
               </p>
               <p>
-                To produce consistent, understandable results while manually testing the Token Bucket algorithm, extremely small delays are intentionally restricted. This is <strong>not</strong> a limitation of the rate limiter itself. The implementation is fully correct. It is simply the nature of testing real HTTP requests over a real network stack.
+                To produce consistent, understandable results while manually testing the {isFixedWindow ? 'Fixed Window' : 'Token Bucket'} algorithm, extremely small delays are intentionally restricted. This is <strong>not</strong> a limitation of the rate limiter itself. The implementation is fully correct. It is simply the nature of testing real HTTP requests over a real network stack.
               </p>
               <p className="text-blue-500/80 italic">
                 A dedicated Traffic Simulator will be introduced in a future phase to demonstrate mathematically perfect traffic bursts, ideal algorithm behavior, and side-by-side algorithm comparisons without browser, network, or database timing effects.
               </p>
             </div>
           </div>
-          
+
           {/* Controls & Visualizer Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
+
             {/* Control Panel */}
             <div className="space-y-6">
               <div className="space-y-4 p-5 rounded-xl border border-border/50 bg-muted/10">
@@ -478,7 +543,7 @@ run_sequential 15
                       POST
                     </span>
                     <code className="flex-1 px-3 py-2 rounded-none rounded-r-md border border-border bg-background text-sm text-muted-foreground">
-                      /api/v1/rate-limit
+                      {isFixedWindow ? '/api/v1/rate-limit/fixed-window' : '/api/v1/rate-limit'}
                     </code>
                   </div>
                 </div>
@@ -486,11 +551,11 @@ run_sequential 15
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Request Count</label>
-                    <Input 
-                      type="number" 
+                    <Input
+                      type="number"
                       min="1" max="100"
-                      value={requestCount} 
-                      onChange={(e) => setRequestCount(e.target.value)} 
+                      value={requestCount}
+                      onChange={(e) => setRequestCount(e.target.value)}
                       onBlur={() => {
                         let val = Number(requestCount);
                         if (isNaN(val) || val < 1) val = 1;
@@ -506,11 +571,11 @@ run_sequential 15
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Delay (ms)</label>
-                    <Input 
-                      type="number" 
+                    <Input
+                      type="number"
                       min="600" max="60000"
-                      value={delayMs} 
-                      onChange={(e) => setDelayMs(e.target.value)} 
+                      value={delayMs}
+                      onChange={(e) => setDelayMs(e.target.value)}
                       onBlur={() => {
                         let val = Number(delayMs);
                         if (isNaN(val) || val < 600) val = 600;
@@ -528,25 +593,25 @@ run_sequential 15
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Button 
-                  onClick={() => handleExecuteRequests(Number(requestCount) || 1)} 
-                  disabled={isExecuting || Number(requestCount) < 1 || Number(requestCount) > 100 || Number(delayMs) < 600 || Number(delayMs) > 60000} 
+                <Button
+                  onClick={() => handleExecuteRequests(Number(requestCount) || 1)}
+                  disabled={isExecuting || Number(requestCount) < 1 || Number(requestCount) > 100 || Number(delayMs) < 600 || Number(delayMs) > 60000}
                   className="w-full"
                 >
                   <Play className="h-4 w-4 mr-2" /> Send Custom
                 </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleExecuteRequests(1)} 
-                  disabled={isExecuting || Number(delayMs) < 600 || Number(delayMs) > 60000} 
+                <Button
+                  variant="outline"
+                  onClick={() => handleExecuteRequests(1)}
+                  disabled={isExecuting || Number(delayMs) < 600 || Number(delayMs) > 60000}
                   className="w-full"
                 >
                   Send 1 Request
                 </Button>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => handleExecuteRequests(10)} 
-                  disabled={isExecuting || Number(delayMs) < 600 || Number(delayMs) > 60000} 
+                <Button
+                  variant="secondary"
+                  onClick={() => handleExecuteRequests(10)}
+                  disabled={isExecuting || Number(delayMs) < 600 || Number(delayMs) > 60000}
                   className="w-full"
                 >
                   Send 10 Requests
@@ -558,17 +623,17 @@ run_sequential 15
             </div>
 
             <div className="space-y-6">
-              
+
               <div className="space-y-3">
                 <div className="flex justify-between items-end">
-                  <h3 className="text-sm font-medium text-muted-foreground">Live Bucket State</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground">{isFixedWindow ? 'Window Remaining' : 'Live Bucket State'}</h3>
                   <div className="text-xl font-bold font-mono">
                     {currentTokens} <span className="text-sm text-muted-foreground font-normal">/ {capacity}</span>
                   </div>
                 </div>
-                
+
                 <div className="h-8 w-full bg-muted/50 rounded-lg border border-border overflow-hidden relative shadow-inner">
-                  <div 
+                  <div
                     className="absolute top-0 left-0 h-full bg-primary flex items-center justify-end px-2"
                     style={{ width: `${percentFull}%` }}
                   >
@@ -577,7 +642,7 @@ run_sequential 15
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground text-right">
-                  Visualization represents currently available tokens.
+                  {isFixedWindow ? 'Visualization represents remaining requests in current window.' : 'Visualization represents currently available tokens.'}
                 </p>
               </div>
 
@@ -603,27 +668,27 @@ run_sequential 15
           <div className="mt-8 border border-border/50 rounded-xl overflow-hidden bg-[#0A0A0A]">
             <div className="bg-muted/10 px-4 py-2 border-b border-border/50 flex justify-between items-center">
               <span className="text-xs font-mono text-muted-foreground">Session Log (Last 50 requests)</span>
-              {isExecuting && <span className="flex items-center gap-2 text-xs text-primary"><div className="h-2 w-2 rounded-full bg-primary animate-pulse"/> Executing...</span>}
+              {isExecuting && <span className="flex items-center gap-2 text-xs text-primary"><div className="h-2 w-2 rounded-full bg-primary animate-pulse" /> Executing...</span>}
             </div>
-            
+
             <div className="h-[250px] overflow-y-auto p-4 font-mono text-sm space-y-2">
               {logs.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground/50 italic text-sm">
                   Waiting for requests...
                 </div>
               ) : (
-                [...logs].reverse().map((log) => (
+                logs.map((log) => (
                   <div key={log.id} className="flex items-center gap-4 py-1.5 border-b border-border/10 last:border-0 hover:bg-white/5 px-2 rounded transition-colors">
                     <span className="text-muted-foreground w-20 shrink-0 text-xs">{log.timestamp.toLocaleTimeString(undefined, { hour12: false, fractionalSecondDigits: 2 })}</span>
-                    
+
                     <span className={`w-16 shrink-0 font-bold ${log.decision === 'ALLOW' ? 'text-green-500' : 'text-destructive'}`}>
                       {log.decision}
                     </span>
-                    
+
                     <span className="w-12 shrink-0 text-center text-muted-foreground">
                       {log.status}
                     </span>
-                    
+
                     <span className="flex-1 text-muted-foreground">
                       Rem: <span className="text-foreground">{Math.floor(log.remainingTokens)}</span>
                       {log.retryAfter && (
@@ -636,7 +701,6 @@ run_sequential 15
                   </div>
                 ))
               )}
-              <div ref={logsEndRef} />
             </div>
           </div>
 
@@ -657,32 +721,49 @@ run_sequential 15
             <div className="space-y-4">
               <h3 className="font-semibold text-lg text-foreground">In-Memory Testing Endpoint</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                When performing high-throughput load tests or testing simultaneous bursts, 
-                you should use the dedicated <strong>In-Memory</strong> endpoint. 
-                Unlike the persistent PostgreSQL endpoint which relies on database networking 
-                and Optimistic Concurrency Control (OCC), the in-memory endpoint has 
+                When performing high-throughput load tests or testing simultaneous bursts,
+                you should use the dedicated <strong>In-Memory</strong> endpoint.
+                Unlike the persistent PostgreSQL endpoint which relies on database networking
+                and Optimistic Concurrency Control (OCC), the in-memory endpoint has
                 <strong className="text-foreground"> virtually zero latency</strong> and perfectly handles simultaneous traffic spikes.
               </p>
               <div className="bg-muted/30 rounded-md border border-border/50 p-3 space-y-2 mt-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Endpoint:</span>
-                  <code className="text-primary font-semibold">/api/v1/rate-limit/memory</code>
+                  <code className="text-primary font-semibold">
+                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : '/api/v1/rate-limit/memory'}
+                  </code>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Fixed Capacity:</span>
-                  <code className="text-foreground font-semibold">10 tokens</code>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Fixed Refill Rate:</span>
-                  <code className="text-foreground font-semibold">1 token / sec</code>
-                </div>
+                {isFixedWindow ? (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Default Limit:</span>
+                      <code className="text-foreground font-semibold">10 requests</code>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Default Window:</span>
+                      <code className="text-foreground font-semibold">60 seconds</code>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Fixed Capacity:</span>
+                      <code className="text-foreground font-semibold">10 tokens</code>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Fixed Refill Rate:</span>
+                      <code className="text-foreground font-semibold">1 token / sec</code>
+                    </div>
+                  </>
+                )}
               </div>
-              
+
               <div className="text-xs text-muted-foreground bg-blue-500/10 border border-blue-500/20 p-3 rounded-md mt-4">
                 <span className="font-semibold text-blue-500">Note:</span> This is a pure sandbox environment. Requests made to this endpoint are <strong>not saved</strong> to the database and will not appear in your dashboard analytics. Buckets are isolated by IP address and automatically cleared after 30 minutes of inactivity.
               </div>
             </div>
-            
+
             <div className="space-y-4 flex flex-col justify-center">
               <h3 className="font-semibold text-lg text-foreground text-center md:text-left">Download Test Scripts</h3>
               <p className="text-sm text-muted-foreground text-center md:text-left">

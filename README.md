@@ -4,13 +4,17 @@
 
 # LimitLab
 
-![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)
 > 🚧 **Under Construction:** LimitLab is currently in active development. Features, database architecture, and APIs are actively being built and are subject to change. 🚧
 
 Real-Time Rate Limiting Playground.
 
 ## Overview
 LimitLab is an interactive platform where users can configure, simulate, visualize, and compare different rate limiting algorithms in real time, such as Token Bucket, Fixed Window, and Sliding Window.
+
+## Features
+- **Token Bucket Algorithm:** Production-grade PostgreSQL and high-performance In-Memory implementations. Features accurate fractional token refill, Optimistic Concurrency Control (OCC) for race conditions, and real-time frontend visualization.
+- **Fixed Window Algorithm:** PostgreSQL and In-Memory implementations bound to absolute system clock time boundaries. Includes strict window resets, live UI progress bars, and authentic single-client load testing.
 
 ## Tech Stack
 **Frontend:** React, TypeScript, Vite, Tailwind CSS (v4), React Router, Socket.IO Client

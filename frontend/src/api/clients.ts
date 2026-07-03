@@ -13,12 +13,18 @@ export interface Client {
     requestsPerSecond: number;
     burstSize: number;
     refillRate: number;
+    windowDurationMs?: number;
     isEnabled: boolean;
   };
   bucketState?: {
     remainingTokens: number;
     currentCapacity: number;
     lastRefillTime: string;
+  };
+  windowState?: {
+    currentWindow: string;
+    requestCount: number;
+    resetTime: string;
   };
   statistics?: {
     totalRequests: string;
@@ -38,12 +44,28 @@ export const getClientById = async (id: string): Promise<Client> => {
   return response.data;
 };
 
-export const createClient = async (data: { name: string; description?: string; capacity: number; refillRate: number }): Promise<Client> => {
+export const createClient = async (data: {
+  name: string;
+  description?: string;
+  algorithm?: string;
+  capacity?: number;
+  refillRate?: number;
+  windowDurationMs?: number;
+  requestLimit?: number;
+}): Promise<Client> => {
   const response = await api.post('/clients', data);
   return response.data;
 };
 
-export const updateClient = async (id: string, data: { name?: string; description?: string; capacity?: number; refillRate?: number; isActive?: boolean }): Promise<Client> => {
+export const updateClient = async (id: string, data: {
+  name?: string;
+  description?: string;
+  capacity?: number;
+  refillRate?: number;
+  windowDurationMs?: number;
+  requestLimit?: number;
+  isActive?: boolean;
+}): Promise<Client> => {
   const response = await api.put(`/clients/${id}`, data);
   return response.data;
 };
@@ -51,3 +73,4 @@ export const updateClient = async (id: string, data: { name?: string; descriptio
 export const deleteClient = async (id: string): Promise<void> => {
   await api.delete(`/clients/${id}`);
 };
+

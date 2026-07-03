@@ -4,7 +4,10 @@ export interface RateLimitResponse {
   decision: 'ALLOW' | 'DENY';
   capacity: number;
   remainingTokens: number;
+  requestCount?: number;
   retryAfter?: number;
+  retryAfterSeconds?: number;
+  resetTimestamp?: number;
 }
 
 export const evaluateRateLimit = async (
@@ -12,12 +15,10 @@ export const evaluateRateLimit = async (
   requestCount?: number,
   delayMs?: number
 ): Promise<RateLimitResponse> => {
-  // We use POST as instructed in the backend for rate limit evaluation
   const response = await api.post(
     '/rate-limit', 
     { apiKey, requestCount, delayMs }, 
     {
-      // Prevent axios from throwing on 400 or 429 status so we can handle it cleanly
       validateStatus: (status) => status === 200 || status === 429 || status === 400
     }
   );
@@ -28,3 +29,24 @@ export const evaluateRateLimit = async (
 
   return response.data;
 };
+
+export const evaluateFixedWindowRateLimit = async (
+  apiKey: string,
+  requestCount?: number,
+  delayMs?: number
+): Promise<RateLimitResponse> => {
+  const response = await api.post(
+    '/rate-limit/fixed-window',
+    { apiKey, requestCount, delayMs },
+    {
+      validateStatus: (status) => status === 200 || status === 429 || status === 400
+    }
+  );
+
+  if (response.status === 400) {
+    throw new Error(response.data.error || 'Validation error');
+  }
+
+  return response.data;
+};
+
