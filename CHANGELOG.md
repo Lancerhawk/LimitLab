@@ -2,6 +2,20 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [0.6.0] - 2026-07-04
+### Added
+- Engineered a pure client-side deterministic simulation engine (Phase 6) to model and compare Token Bucket and Fixed Window algorithms.
+- Created an interactive timeline for visualizing traffic events, allowing manual placement, dragging, and deletion of individual requests.
+- Developed real-time visualizers including a Token Bucket capacity meter and a Fixed Window countdown ring.
+- Integrated robust Recharts graphs for throughput, token levels, and acceptance rates with dynamic tooltips.
+- Added a dedicated "Comparison Mode" to evaluate both algorithms side-by-side using identical synchronized traffic datasets.
+- Implemented comprehensive traffic generators simulating constant load, bursts, and randomized realistic API traffic patterns.
+- Resolved extreme React rendering bottlenecks under high traffic load (~10,000 requests) using visual DOM clustering and 30fps RAF batching.
+- Decoupled high-frequency lightweight state (playhead, bucket fill) from low-frequency heavy state (Recharts arrays, timeline DOM nodes).
+- Optimized statistics computation from multiple nested iterations into a single O(n) array pass, removing large intermediate structures.
+- Isolated React components using strict memoization to eliminate redundant render cycles during 60fps simulation playback.
+- Fixed a concurrency edge case in comparison mode where finished simulations erroneously wiped state when receiving identical traffic inputs.
+
 ## [0.5.0] - 2026-07-03
 ### Added
 - Designed and implemented a production-grade PostgreSQL-backed Fixed Window rate limiter
