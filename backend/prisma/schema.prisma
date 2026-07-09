@@ -32,6 +32,7 @@ model Client {
   configuration RateLimitConfiguration?
   bucketState   BucketState?
   windowState   WindowState?
+  slidingWindowState SlidingWindowState?
   statistics    ClientStatistics?
   requestLogs   RequestLog[]
 
@@ -88,6 +89,22 @@ model WindowState {
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("window_states")
+}
+
+model SlidingWindowState {
+  id               String   @id @default(uuid())
+  clientId         String   @unique
+  currentWindow    BigInt
+  requestCount     Int      @default(0)
+  previousWindow   BigInt
+  previousCount    Int      @default(0)
+  resetTime        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("sliding_window_states")
 }
 
 model ClientStatistics {

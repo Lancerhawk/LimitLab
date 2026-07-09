@@ -50,3 +50,23 @@ export const evaluateFixedWindowRateLimit = async (
   return response.data;
 };
 
+export const evaluateSlidingWindowRateLimit = async (
+  apiKey: string,
+  requestCount?: number,
+  delayMs?: number
+): Promise<RateLimitResponse> => {
+  const response = await api.post(
+    '/rate-limit/sliding-window',
+    { apiKey, requestCount, delayMs },
+    {
+      validateStatus: (status) => status === 200 || status === 429 || status === 400
+    }
+  );
+
+  if (response.status === 400) {
+    throw new Error(response.data.error || 'Validation error');
+  }
+
+  return response.data;
+};
+

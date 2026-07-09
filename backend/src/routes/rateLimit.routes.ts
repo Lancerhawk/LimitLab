@@ -15,4 +15,10 @@ router.get('/fixed-window', RateLimitController.processFixedWindow);
 router.post('/fixed-window/memory', RateLimitController.processFixedWindowMemory);
 router.get('/fixed-window/memory', RateLimitController.processFixedWindowMemory);
 
+router.post('/sliding-window', RateLimitController.processSlidingWindow);
+router.get('/sliding-window', RateLimitController.processSlidingWindow);
+
+router.post('/sliding-window/memory', RateLimitController.processSlidingWindowMemory);
+router.get('/sliding-window/memory', RateLimitController.processSlidingWindowMemory);
+
 export default router;

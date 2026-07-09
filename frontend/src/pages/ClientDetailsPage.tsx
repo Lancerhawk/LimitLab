@@ -4,8 +4,9 @@ import { PageHeader } from '../components/common/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { Modal } from '../components/ui/Modal';
 import { getClientById, type Client } from '../api/clients';
-import { evaluateRateLimit, evaluateFixedWindowRateLimit } from '../api/rateLimit';
+import { evaluateRateLimit, evaluateFixedWindowRateLimit, evaluateSlidingWindowRateLimit } from '../api/rateLimit';
 import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -25,6 +26,7 @@ const ClientDetailsPage = () => {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
   // Playground State
   const [requestCount, setRequestCount] = useState<number | string>(1);
@@ -60,6 +62,7 @@ const ClientDetailsPage = () => {
   }, [id]);
 
   const isFixedWindow = client?.configuration?.algorithm === 'FIXED_WINDOW';
+  const isSlidingWindow = client?.configuration?.algorithm === 'SLIDING_WINDOW';
 
   useEffect(() => {
     if (!client?.configuration) return;
@@ -68,7 +71,7 @@ const ClientDetailsPage = () => {
       const limit = client.configuration!.requestsPerSecond ?? 10;
 
       const calculateFixedWindowTokens = () => {
-        if (!client.windowState?.resetTime) return Math.max(0, limit - (client.windowState?.requestCount ?? 0));
+        if (!client.windowState?.resetTime) return limit;
 
         const resetTimeMs = new Date(client.windowState.resetTime).getTime();
         if (Date.now() >= resetTimeMs) {
@@ -83,6 +86,45 @@ const ClientDetailsPage = () => {
       const interval = setInterval(() => {
         setLiveTokens(calculateFixedWindowTokens());
       }, 1000); // Check every second to see if window expired
+
+      return () => clearInterval(interval);
+    }
+
+    if (isSlidingWindow) {
+      const limit = client.configuration!.requestsPerSecond ?? 10;
+
+      const calculateSlidingWindowTokens = () => {
+        if (!client.slidingWindowState?.resetTime) return limit;
+
+        const now = Date.now();
+        const durationMs = client.configuration!.windowDurationMs ?? 60000;
+        const currentWindow = Math.floor(now / durationMs);
+        
+        // Note: resetTime is (currentWindow + 1) * durationMs when it was last saved
+        const storedWindow = Math.floor((new Date(client.slidingWindowState.resetTime).getTime() - durationMs) / durationMs);
+
+        let curCount = 0;
+        let prevCount = 0;
+
+        if (currentWindow === storedWindow) {
+          curCount = client.slidingWindowState.requestCount ?? 0;
+          prevCount = client.slidingWindowState.previousCount ?? 0;
+        } else if (currentWindow === storedWindow + 1) {
+          prevCount = client.slidingWindowState.requestCount ?? 0;
+        }
+
+        const elapsed = now - (currentWindow * durationMs);
+        const overlap = Math.max(0, 1 - (elapsed / durationMs));
+        const effectiveCount = curCount + (prevCount * overlap);
+
+        return Math.max(0, limit - effectiveCount);
+      };
+
+      setLiveTokens(calculateSlidingWindowTokens());
+
+      const interval = setInterval(() => {
+        setLiveTokens(calculateSlidingWindowTokens());
+      }, 1000);
 
       return () => clearInterval(interval);
     }
@@ -118,20 +160,24 @@ const ClientDetailsPage = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const downloadScript = (language: 'node' | 'python' | 'bash') => {
+  const downloadScript = (language: 'node' | 'python' | 'bash', variant: 'basic' | 'advanced') => {
     if (!client) return;
 
     const endpoint = isFixedWindow
       ? 'http://localhost:3001/api/v1/rate-limit/fixed-window/memory'
+      : isSlidingWindow 
+      ? 'http://localhost:3001/api/v1/rate-limit/sliding-window/memory'
       : 'http://localhost:3001/api/v1/rate-limit/memory';
-    const waitS = isFixedWindow ? 61 : 12;
-    const waitMsg = isFixedWindow ? 'for window to reset' : 'for refill';
+    const waitS = isFixedWindow || isSlidingWindow ? 61 : 12;
+    const waitMsg = isFixedWindow || isSlidingWindow ? 'for window to reset' : 'for refill';
     
     let content = '';
     let filename = '';
+    const fileSuffix = variant === 'advanced' ? '_advanced' : '_basic';
 
     if (language === 'node') {
-      filename = 'load_test.js';
+      filename = `load_test${fileSuffix}.js`;
+      const headerCode = variant === 'advanced' ? `, {\n      headers: { 'x-client-id': 'simulated-user-' + requestNumber },\n      validateStatus: () => true\n    }` : `, {\n      validateStatus: () => true\n    }`;
       content = `const axios = require('axios');
 
 const ENDPOINT = '${endpoint}';
@@ -139,9 +185,7 @@ const ENDPOINT = '${endpoint}';
 async function sendRequest(requestNumber) {
   const start = Date.now();
   try {
-    const res = await axios.post(ENDPOINT, {}, {
-      validateStatus: () => true
-    });
+    const res = await axios.post(ENDPOINT, {}${headerCode});
     return { req: requestNumber, status: res.status, decision: res.data.decision, latency: Date.now() - start };
   } catch (err) {
     return { req: requestNumber, status: 0, decision: 'ERROR', latency: Date.now() - start };
@@ -191,7 +235,8 @@ async function run() {
 run();
 `;
     } else if (language === 'python') {
-      filename = 'load_test.py';
+      filename = `load_test${fileSuffix}.py`;
+      const headerCode = variant === 'advanced' ? `headers={'x-client-id': f'simulated-user-{i}'}` : ``;
       content = `import requests
 import concurrent.futures
 import time
@@ -200,7 +245,7 @@ ENDPOINT = '${endpoint}'
 
 def send_request(i):
     try:
-        res = requests.post(ENDPOINT)
+        res = requests.post(ENDPOINT${headerCode ? `, ${headerCode}` : ''})
         return res.json().get('decision', 'DENY' if res.status_code == 429 else 'ALLOW')
     except Exception:
         return 'ERROR'
@@ -240,7 +285,8 @@ time.sleep(${waitS})
 print_results("TEST 4: 15 Sequential (100ms delay)", run_sequential(15, 100))
 `;
     } else if (language === 'bash') {
-      filename = 'load_test.sh';
+      filename = `load_test${fileSuffix}.sh`;
+      const headerCode = variant === 'advanced' ? ` -H "x-client-id: simulated-user-$i"` : ``;
       content = `#!/bin/bash
 ENDPOINT="${endpoint}"
 
@@ -249,7 +295,7 @@ echo "Starting tests against $ENDPOINT..."
 run_simultaneous() {
   echo -e "\\n--- TEST: $1 Simultaneous ---"
   for i in $(seq 1 $1); do
-    curl -s -X POST "$ENDPOINT" &
+    curl -s -X POST "$ENDPOINT"${headerCode} &
   done
   wait
   echo -e "\\nDone."
@@ -258,7 +304,7 @@ run_simultaneous() {
 run_sequential() {
   echo -e "\\n--- TEST: $1 Sequential (100ms delay) ---"
   for i in $(seq 1 $1); do
-    curl -s -X POST "$ENDPOINT"
+    curl -s -X POST "$ENDPOINT"${headerCode}
     echo ""
     sleep 0.1
   done
@@ -290,6 +336,7 @@ run_sequential 15
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success(`Downloaded ${filename}`);
+    setIsDownloadModalOpen(false);
   };
 
   const handleExecuteRequests = async (count: number) => {
@@ -309,7 +356,11 @@ run_sequential 15
         }
 
         try {
-          const evaluator = isFixedWindow ? evaluateFixedWindowRateLimit : evaluateRateLimit;
+          const evaluator = isFixedWindow 
+            ? evaluateFixedWindowRateLimit 
+            : isSlidingWindow 
+            ? evaluateSlidingWindowRateLimit 
+            : evaluateRateLimit;
           const response = await evaluator(client.apiKey, safeCount, safeDelay);
 
           const logEntry: RequestLog = {
@@ -351,6 +402,37 @@ run_sequential 15
                   ...prev.windowState,
                   requestCount: limit - response.remainingTokens,
                   currentWindow: currentWindow.toString(),
+                  resetTime: response.resetTimestamp ? new Date(response.resetTimestamp * 1000).toISOString() : calculatedResetTime
+                }
+              };
+            }
+
+            if (isSlidingWindow) {
+              const durationMs = prev.configuration?.windowDurationMs ?? 60000;
+              const now = Date.now();
+              const currentWindow = Math.floor(now / durationMs);
+              const calculatedResetTime = new Date((currentWindow + 1) * durationMs).toISOString();
+              
+              const isNewWindow = prev.slidingWindowState?.currentWindow !== currentWindow.toString();
+              const currentCount = isNewWindow ? 0 : (prev.slidingWindowState?.requestCount ?? 0);
+              
+              let previousCount = prev.slidingWindowState?.previousCount ?? 0;
+              if (isNewWindow) {
+                if (prev.slidingWindowState?.currentWindow === (currentWindow - 1).toString()) {
+                  previousCount = prev.slidingWindowState.requestCount ?? 0;
+                } else {
+                  previousCount = 0;
+                }
+              }
+
+              return {
+                ...prev,
+                slidingWindowState: {
+                  ...prev.slidingWindowState,
+                  requestCount: response.decision === 'ALLOW' ? currentCount + 1 : currentCount,
+                  currentWindow: currentWindow.toString(),
+                  previousWindow: (currentWindow - 1).toString(),
+                  previousCount: previousCount,
                   resetTime: response.resetTimestamp ? new Date(response.resetTimestamp * 1000).toISOString() : calculatedResetTime
                 }
               };
@@ -731,10 +813,10 @@ run_sequential 15
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Endpoint:</span>
                   <code className="text-primary font-semibold">
-                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : '/api/v1/rate-limit/memory'}
+                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window/memory' : '/api/v1/rate-limit/memory'}
                   </code>
                 </div>
-                {isFixedWindow ? (
+                {isFixedWindow || isSlidingWindow ? (
                   <>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">Default Limit:</span>
@@ -769,21 +851,61 @@ run_sequential 15
               <p className="text-sm text-muted-foreground text-center md:text-left">
                 Download a standalone, ready-to-run script pre-configured with this client's credentials. No external configuration required.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <Button variant="outline" className="flex-1 bg-background hover:bg-muted" onClick={() => downloadScript('node')}>
-                  <Download className="h-4 w-4 mr-2" /> Node.js
-                </Button>
-                <Button variant="outline" className="flex-1 bg-background hover:bg-muted" onClick={() => downloadScript('python')}>
-                  <Download className="h-4 w-4 mr-2" /> Python
-                </Button>
-                <Button variant="outline" className="flex-1 bg-background hover:bg-muted" onClick={() => downloadScript('bash')}>
-                  <Download className="h-4 w-4 mr-2" /> Bash
+              <div className="flex flex-col gap-3 pt-2">
+                <Button className="w-full" size="lg" onClick={() => setIsDownloadModalOpen(true)}>
+                  <Download className="h-5 w-5 mr-2" /> Download Test Scripts
                 </Button>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <Modal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        title={`Download ${isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : 'Token Bucket'} Scripts`}
+        description="Choose the type of load testing script you want to download."
+        className="max-w-2xl"
+      >
+        <div className="space-y-6 mt-4">
+          <div className="space-y-3 p-4 border border-border/50 rounded-lg bg-card">
+            <h4 className="font-semibold text-foreground flex items-center gap-2">
+              <Terminal className="h-4 w-4 text-primary" />
+              Basic Sandbox Script (IP-Based)
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              A perfectly isolated script that hits the in-memory endpoint using your IP address. 
+              {isSlidingWindow && " Watch how your capacity smoothly regenerates over the window overlap."}
+              {isFixedWindow && " Watch how requests are hard-blocked until the exact moment the window resets."}
+              {!isFixedWindow && !isSlidingWindow && " Watch how your tokens are steadily refilled second by second."}
+              Ideal for running simple local tests.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('node', 'basic')}>Node.js</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('python', 'basic')}>Python</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('bash', 'basic')}>Bash</Button>
+            </div>
+          </div>
+
+          <div className="space-y-3 p-4 border border-primary/20 rounded-lg bg-primary/5">
+            <h4 className="font-semibold text-primary flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Advanced Multi-Client Script (Simulated Users)
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              A high-performance script that injects unique <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id</code> headers 
+              to simulate hundreds of <strong>completely distinct users</strong> hammering the {isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : 'Token Bucket'} 
+              algorithm at the exact same time. Essential for testing concurrent system isolation.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button variant="default" className="flex-1" onClick={() => downloadScript('node', 'advanced')}>Node.js</Button>
+              <Button variant="default" className="flex-1" onClick={() => downloadScript('python', 'advanced')}>Python</Button>
+              <Button variant="default" className="flex-1" onClick={() => downloadScript('bash', 'advanced')}>Bash</Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

@@ -1,6 +1,6 @@
 {
   "name": "limitlab-backend",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "LimitLab backend",
   "main": "dist/index.js",
   "scripts": {
@@ -10,7 +10,8 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test:load": "ts-node tests/loadTest.ts",
-    "test:load:fw": "ts-node tests/fixedWindowLoadTest.ts"
+    "test:load:fw": "ts-node tests/fixedWindowLoadTest.ts",
+    "test:load:sw": "ts-node tests/slidingWindowLoadTest.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

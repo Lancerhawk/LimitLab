@@ -82,6 +82,7 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = React.memo(({
                   <>
                     <option value="TOKEN_BUCKET" className="bg-card text-foreground">Token Bucket</option>
                     <option value="FIXED_WINDOW" className="bg-card text-foreground">Fixed Window</option>
+                    <option value="SLIDING_WINDOW" className="bg-card text-foreground">Sliding Window Counter</option>
                   </>
                 )}
               </select>

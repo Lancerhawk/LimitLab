@@ -26,6 +26,13 @@ export interface Client {
     requestCount: number;
     resetTime: string;
   };
+  slidingWindowState?: {
+    currentWindow: string;
+    requestCount: number;
+    previousWindow: string;
+    previousCount: number;
+    resetTime: string;
+  };
   statistics?: {
     totalRequests: string;
     allowedRequests: string;

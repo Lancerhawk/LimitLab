@@ -22,7 +22,7 @@ const ClientsPage = () => {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [algorithm, setAlgorithm] = useState<'TOKEN_BUCKET' | 'FIXED_WINDOW'>('TOKEN_BUCKET');
+  const [algorithm, setAlgorithm] = useState<'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW'>('TOKEN_BUCKET');
   const [capacity, setCapacity] = useState('10');
   const [refillRate, setRefillRate] = useState('0.1');
   const [windowDurationMs, setWindowDurationMs] = useState('60000');
@@ -64,7 +64,7 @@ const ClientsPage = () => {
     setSelectedClient(client);
     setName(client.name);
     setDescription(client.description || '');
-    const algo = (client.configuration?.algorithm as 'TOKEN_BUCKET' | 'FIXED_WINDOW') || 'TOKEN_BUCKET';
+    const algo = (client.configuration?.algorithm as 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW') || 'TOKEN_BUCKET';
     setAlgorithm(algo);
     if (algo === 'TOKEN_BUCKET') {
       setCapacity(client.configuration?.burstSize?.toString() || '10');
@@ -97,7 +97,7 @@ const ClientsPage = () => {
         await createClient({
           name,
           description,
-          algorithm: 'FIXED_WINDOW',
+          algorithm: algorithm,
           windowDurationMs: parseInt(windowDurationMs),
           requestLimit: parseInt(requestLimit),
         });
@@ -220,8 +220,8 @@ const ClientsPage = () => {
             <div className="pr-2">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-lg">{client.name}</h3>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                  {isTokenBucket ? 'Token Bucket' : 'Fixed Window'}
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                  {isTokenBucket ? 'Token Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : 'Fixed Window'}
                 </span>
               </div>
               {client.description && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{client.description}</p>}
@@ -282,7 +282,7 @@ const ClientsPage = () => {
                 <div className="flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-amber-500/70 ml-1.5 mr-1" />
                   <span className="text-muted-foreground">Count:</span>
-                  <span className="font-medium">{client.windowState?.requestCount ?? 'N/A'}</span>
+                  <span className="font-medium">{algo === 'SLIDING_WINDOW' ? client.slidingWindowState?.requestCount ?? 'N/A' : client.windowState?.requestCount ?? 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`h-1.5 w-1.5 rounded-full ml-1.5 mr-1 ${client.isActive ? 'bg-green-500' : 'bg-destructive'}`} />
@@ -388,6 +388,19 @@ const ClientsPage = () => {
                 <p className="text-sm font-semibold">Fixed Window</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Counter resets at fixed intervals</p>
               </button>
+              <button
+                type="button"
+                onClick={() => setAlgorithm('SLIDING_WINDOW')}
+                disabled={isSubmitting}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  algorithm === 'SLIDING_WINDOW'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'
+                }`}
+              >
+                <p className="text-sm font-semibold">Sliding Window</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Smooth rate limiting with overlapping intervals</p>
+              </button>
             </div>
           </div>
 
@@ -421,7 +434,7 @@ const ClientsPage = () => {
           <div className="space-y-2">
             <label className="text-sm font-medium">Algorithm</label>
             <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-sm text-muted-foreground">
-              {selectedClient?.configuration?.algorithm === 'FIXED_WINDOW' ? 'Fixed Window' : 'Token Bucket'}
+              {selectedClient?.configuration?.algorithm === 'FIXED_WINDOW' ? 'Fixed Window' : selectedClient?.configuration?.algorithm === 'SLIDING_WINDOW' ? 'Sliding Window' : 'Token Bucket'}
               <span className="text-xs ml-2 italic">(Cannot be changed after creation)</span>
             </div>
           </div>

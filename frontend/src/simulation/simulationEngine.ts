@@ -4,10 +4,12 @@ import type {
   TrafficEvent,
   TokenBucketState,
   FixedWindowState,
+  SlidingWindowState,
   HistoryPoint,
 } from './types';
 import { simulateTokenBucket, refillTokenBucket } from './algorithms/tokenBucketSimulator';
 import { simulateFixedWindow, getWindowInfo } from './algorithms/fixedWindowSimulator';
+import { simulateSlidingWindow, getSlidingWindowInfo } from './algorithms/slidingWindowSimulator';
 
 const HISTORY_INTERVAL_MS = 100;
 
@@ -41,6 +43,7 @@ export class SimulationEngine {
 
   private tbState: TokenBucketState = { tokens: 0, lastRefillTimeMs: 0 };
   private fwState: FixedWindowState = { requestCount: 0, windowStartMs: 0 };
+  private swState: SlidingWindowState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
 
   private totalAccepted = 0;
   private totalRejected = 0;
@@ -59,6 +62,7 @@ export class SimulationEngine {
     this.config = { ...config };
     this.tbState = { tokens: config.capacity, lastRefillTimeMs: 0 };
     this.fwState = { requestCount: 0, windowStartMs: 0 };
+    this.swState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
   }
 
   onTick(callback: TickCallback): () => void {
@@ -76,9 +80,15 @@ export class SimulationEngine {
   }
 
   getSnapshot(): SimulationSnapshot {
-    const tokens = this.config.algorithm === 'TOKEN_BUCKET'
-      ? this.tbState.tokens
-      : Math.max(0, this.config.requestLimit - this.fwState.requestCount);
+    let tokens: number;
+    if (this.config.algorithm === 'TOKEN_BUCKET') {
+      tokens = this.tbState.tokens;
+    } else if (this.config.algorithm === 'SLIDING_WINDOW') {
+      const info = getSlidingWindowInfo(this.swState, this.config, this.simulationTimeMs);
+      tokens = info.remaining;
+    } else {
+      tokens = Math.max(0, this.config.requestLimit - this.fwState.requestCount);
+    }
 
     return {
       timeMs: this.simulationTimeMs,
@@ -100,7 +110,9 @@ export class SimulationEngine {
       timeMs: this.simulationTimeMs,
       tokens: this.config.algorithm === 'TOKEN_BUCKET'
         ? this.tbState.tokens
-        : Math.max(0, this.config.requestLimit - this.fwState.requestCount),
+        : this.config.algorithm === 'SLIDING_WINDOW'
+          ? Math.max(0, this.config.requestLimit - (this.swState.currentWindowCount + this.swState.previousWindowCount * Math.max(0, 1 - ((this.simulationTimeMs - (Math.floor(this.simulationTimeMs / this.config.windowDurationMs) * this.config.windowDurationMs)) / this.config.windowDurationMs))))
+          : Math.max(0, this.config.requestLimit - this.fwState.requestCount),
       requestCount: this.fwState.requestCount,
       windowStartMs: this.fwState.windowStartMs,
       totalAccepted: this.totalAccepted,
@@ -217,6 +229,7 @@ export class SimulationEngine {
 
     this.tbState = { tokens: this.config.capacity, lastRefillTimeMs: 0 };
     this.fwState = { requestCount: 0, windowStartMs: 0 };
+    this.swState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
 
     this.totalAccepted = 0;
     this.totalRejected = 0;
@@ -305,6 +318,12 @@ export class SimulationEngine {
         this.tbState = result.newState;
         event.decision = result.decision;
         event.tokensAtTime = result.newState.tokens;
+      } else if (this.config.algorithm === 'SLIDING_WINDOW') {
+        const result = simulateSlidingWindow(this.swState, this.config, event.timeMs);
+        this.swState = result.newState;
+        event.decision = result.decision;
+        const info = getSlidingWindowInfo(result.newState, this.config, event.timeMs);
+        event.tokensAtTime = info.remaining;
       } else {
         const result = simulateFixedWindow(this.fwState, this.config, event.timeMs);
         this.fwState = result.newState;
@@ -340,6 +359,19 @@ export class SimulationEngine {
       }
     }
 
+    if (this.config.algorithm === 'SLIDING_WINDOW') {
+      const info = getSlidingWindowInfo(this.swState, this.config, targetTimeMs);
+      if (info.isNewWindow) {
+        this.swState = {
+          ...this.swState,
+          currentWindowCount: 0,
+          currentWindowStartMs: Math.floor(targetTimeMs / this.config.windowDurationMs) * this.config.windowDurationMs,
+          previousWindowCount: info.previousCount,
+          previousWindowStartMs: (Math.floor(targetTimeMs / this.config.windowDurationMs) - 1) * this.config.windowDurationMs,
+        };
+      }
+    }
+
     this.simulationTimeMs = targetTimeMs;
 
     const prevHistoryLen = this.history.length;
@@ -361,9 +393,15 @@ export class SimulationEngine {
   }
 
   private recordHistory() {
-    const tokens = this.config.algorithm === 'TOKEN_BUCKET'
-      ? this.tbState.tokens
-      : Math.max(0, this.config.requestLimit - this.fwState.requestCount);
+    let tokens: number;
+    if (this.config.algorithm === 'TOKEN_BUCKET') {
+      tokens = this.tbState.tokens;
+    } else if (this.config.algorithm === 'SLIDING_WINDOW') {
+      const info = getSlidingWindowInfo(this.swState, this.config, this.lastHistoryTimeMs);
+      tokens = info.remaining;
+    } else {
+      tokens = Math.max(0, this.config.requestLimit - this.fwState.requestCount);
+    }
 
     this.history.push({
       timeMs: this.lastHistoryTimeMs,
@@ -383,6 +421,7 @@ export class SimulationEngine {
     this.processedEventIndex = 0;
     this.tbState = { tokens: this.config.capacity, lastRefillTimeMs: 0 };
     this.fwState = { requestCount: 0, windowStartMs: 0 };
+    this.swState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
     this.totalAccepted = 0;
     this.totalRejected = 0;
     this.history = [];

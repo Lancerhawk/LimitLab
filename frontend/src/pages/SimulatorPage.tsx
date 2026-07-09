@@ -4,6 +4,7 @@ import { useSimulation } from '../simulation/hooks/useSimulation';
 import { SimulatorControls } from '../simulation/components/SimulatorControls';
 import { SimulatorTimeline } from '../simulation/components/SimulatorTimeline';
 import { BucketVisualizer } from '../simulation/components/BucketVisualizer';
+import { SlidingWindowVisualizer } from '../simulation/components/SlidingWindowVisualizer';
 import { SimulatorCharts } from '../simulation/components/SimulatorCharts';
 import { SimulatorStats } from '../simulation/components/SimulatorStats';
 import { BarChart3 } from 'lucide-react';
@@ -175,7 +176,11 @@ export const SimulatorPage = () => {
         <div className="mt-8 space-y-6">
           <div className="flex justify-center">
             <div className="w-full max-w-2xl">
-              <BucketVisualizer config={sim1.config} state={sim1.state} />
+              {sim1.config.algorithm === 'SLIDING_WINDOW' ? (
+                <SlidingWindowVisualizer config={sim1.config} state={sim1.state} />
+              ) : (
+                <BucketVisualizer config={sim1.config} state={sim1.state} />
+              )}
             </div>
           </div>
           <SimulatorStats stats={sim1.stats} />

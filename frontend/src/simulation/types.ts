@@ -1,4 +1,4 @@
-export type AlgorithmType = 'TOKEN_BUCKET' | 'FIXED_WINDOW';
+export type AlgorithmType = 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW';
 
 export interface SimulationConfig {
   algorithm: AlgorithmType;
@@ -26,6 +26,13 @@ export interface TokenBucketState {
 export interface FixedWindowState {
   requestCount: number;
   windowStartMs: number;
+}
+
+export interface SlidingWindowState {
+  currentWindowCount: number;
+  currentWindowStartMs: number;
+  previousWindowCount: number;
+  previousWindowStartMs: number;
 }
 
 export interface HistoryPoint {

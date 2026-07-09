@@ -2,6 +2,19 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [0.7.0] - 2026-07-09
+### Added
+- Implemented a complete, production-grade PostgreSQL-backed Sliding Window Counter algorithm.
+- Designed `SlidingWindowState` Prisma schema extensions to safely track `currentWindow`, `requestCount`, `previousWindow`, and `previousCount`.
+- Engineered real-time window overlap mathematics (`elapsed / windowDurationMs`) to smoothly blend previous and current request weights.
+- Added a dedicated high-performance in-memory Sliding Window algorithm endpoint for load testing.
+- Created standalone dynamic script generation variants (Basic IP-based Sandbox vs Advanced Multi-Client Simulation) across Node.js, Python, and Bash.
+- Refactored the UI to use a dedicated Download Scripts Modal tailored with explicit algorithm-specific educational explanations.
+- Designed live dynamic UI visualizers in the dashboard specifically tailored to calculate and render Sliding Window token approximations in real-time.
+- Developed an authentic `slidingWindowLoadTest.ts` framework simulating heavy simultaneous traffic bursts overlapping window boundaries.
+- Refactored the Traffic Simulator engine to flawlessly render continuous visual boundaries and request weights for Sliding Window limits.
+
+
 ## [0.6.0] - 2026-07-04
 ### Added
 - Engineered a pure client-side deterministic simulation engine (Phase 6) to model and compare Token Bucket and Fixed Window algorithms.

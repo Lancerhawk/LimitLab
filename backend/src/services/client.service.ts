@@ -9,6 +9,7 @@ export class ClientService {
         configuration: true,
         bucketState: true,
         windowState: true,
+        slidingWindowState: true,
         statistics: true,
       },
       orderBy: { createdAt: 'desc' }
@@ -22,6 +23,7 @@ export class ClientService {
         configuration: true,
         bucketState: true,
         windowState: true,
+        slidingWindowState: true,
         statistics: true,
       }
     });
@@ -93,6 +95,33 @@ export class ClientService {
             resetTime: resetTime,
           }
         });
+      } else if (algorithm === RateLimitAlgorithm.SLIDING_WINDOW) {
+        const windowDurationMs = data.windowDurationMs ?? 60000;
+        const requestLimit = data.requestLimit ?? 10;
+
+        await tx.rateLimitConfiguration.create({
+          data: {
+            clientId: client.id,
+            algorithm: RateLimitAlgorithm.SLIDING_WINDOW,
+            requestsPerSecond: requestLimit,
+            windowDurationMs: windowDurationMs,
+          }
+        });
+
+        const now = new Date();
+        const windowStart = Math.floor(now.getTime() / windowDurationMs) * windowDurationMs;
+        const resetTime = new Date(windowStart + windowDurationMs);
+
+        await tx.slidingWindowState.create({
+          data: {
+            clientId: client.id,
+            currentWindow: BigInt(windowStart),
+            requestCount: 0,
+            previousWindow: BigInt(windowStart - windowDurationMs),
+            previousCount: 0,
+            resetTime: resetTime,
+          }
+        });
       }
 
       await tx.clientStatistics.create({
@@ -103,7 +132,7 @@ export class ClientService {
 
       return tx.client.findUnique({
         where: { id: client.id },
-        include: { configuration: true, bucketState: true, windowState: true, statistics: true }
+        include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true, statistics: true }
       });
     });
   }
@@ -164,11 +193,21 @@ export class ClientService {
             }
           });
         }
+      } else if (config?.algorithm === RateLimitAlgorithm.SLIDING_WINDOW) {
+        if (data.windowDurationMs !== undefined || data.requestLimit !== undefined) {
+          await tx.rateLimitConfiguration.update({
+            where: { clientId: id },
+            data: {
+              windowDurationMs: data.windowDurationMs,
+              requestsPerSecond: data.requestLimit,
+            }
+          });
+        }
       }
 
       return tx.client.findUnique({
         where: { id },
-        include: { configuration: true, bucketState: true, windowState: true }
+        include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true }
       });
     });
   }
