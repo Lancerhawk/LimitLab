@@ -31,15 +31,17 @@ async function runSimultaneous(count: number) {
   return Promise.all(promises);
 }
 
-function printResults(name: string, results: any[], expectedAllow: number, expectedDeny: number) {
+function printResults(name: string, results: any[], expectedAllow: number | number[], expectedDeny: number | number[]) {
   const allowed = results.filter((r) => r.decision === 'ALLOW').length;
   const denied = results.filter((r) => r.decision === 'DENY').length;
   
-  const passed = allowed === expectedAllow && denied === expectedDeny;
+  const allowedPassed = Array.isArray(expectedAllow) ? expectedAllow.includes(allowed) : allowed === expectedAllow;
+  const deniedPassed = Array.isArray(expectedDeny) ? expectedDeny.includes(denied) : denied === expectedDeny;
+  const passed = allowedPassed && deniedPassed;
 
   console.log(`\n--- ${name} ---`);
-  console.log(`Allowed: ${allowed} (Expected: ${expectedAllow})`);
-  console.log(`Denied:  ${denied} (Expected: ${expectedDeny})`);
+  console.log(`Allowed: ${allowed} (Expected: ${Array.isArray(expectedAllow) ? expectedAllow.join(' or ') : expectedAllow})`);
+  console.log(`Denied:  ${denied} (Expected: ${Array.isArray(expectedDeny) ? expectedDeny.join(' or ') : expectedDeny})`);
   console.log(`Status:  ${passed ? 'PASS ✅' : 'FAIL ❌'}`);
   
   return passed;
@@ -53,6 +55,9 @@ async function runTests() {
 
   let allPassed = true;
 
+  // Track the window we start in
+  const startWindow = Math.floor(Date.now() / 60000);
+
   // TEST 1: 10 simultaneous requests
   const results1 = await runSimultaneous(10);
   allPassed = printResults('TEST 1: 10 simultaneous requests', results1, 10, 0) && allPassed;
@@ -61,12 +66,26 @@ async function runTests() {
   const results2 = await runSimultaneous(11);
   allPassed = printResults('TEST 2: 11 simultaneous requests', results2, 0, 11) && allPassed;
 
-  // TEST 3: Wait 30 seconds (Half window)
-  console.log('\nWaiting 30 seconds to test overlapping weight...');
-  await new Promise(r => setTimeout(r, 30000));
+  // TEST 3: Wait until exactly halfway into the next real-world window
+  console.log('\nAligning with real-world wall-clock to test exact 50% overlap weight...');
+  console.log('Waiting until exactly 30 seconds into the NEXT minute (may take 30-90s depending on current clock time)...');
+  
+  while (true) {
+    const currentWindow = Math.floor(Date.now() / 60000);
+    const elapsed = Date.now() % 60000;
+    
+    // We must cross into a new window, AND reach exactly 30s into it
+    if (currentWindow > startWindow && elapsed >= 30000) {
+      break;
+    }
+    await new Promise(r => setTimeout(r, 100)); // check every 100ms
+  }
   
   const results3 = await runSimultaneous(20);
-  allPassed = printResults('TEST 3: 20 simultaneous requests at half-window', results3, 5, 15) && allPassed;
+  // Because real-world time keeps ticking during the 1-2ms it takes for the HTTP request to reach the server,
+  // the overlap drops slightly below 50.000%, which mathematically frees up a tiny fraction of a token,
+  // sometimes allowing a 6th request to pass the < 10 threshold.
+  allPassed = printResults('TEST 3: 20 simultaneous requests at half-window', results3, [5, 6], [14, 15]) && allPassed;
   
   console.log('\n========================================');
   console.log(`OVERALL STATUS: ${allPassed ? 'PASS ✅' : 'FAIL ❌'}`);

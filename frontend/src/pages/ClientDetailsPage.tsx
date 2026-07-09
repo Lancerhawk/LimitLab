@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { getClientById, type Client } from '../api/clients';
-import { evaluateRateLimit, evaluateFixedWindowRateLimit, evaluateSlidingWindowRateLimit } from '../api/rateLimit';
+import { evaluateRateLimit, evaluateFixedWindowRateLimit, evaluateSlidingWindowRateLimit, evaluateSlidingLogRateLimit } from '../api/rateLimit';
 import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -34,6 +34,7 @@ const ClientDetailsPage = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [sessionStats, setSessionStats] = useState({ total: 0, allowed: 0, denied: 0 });
+  const [animationTick, setAnimationTick] = useState(0);
   const [liveTokens, setLiveTokens] = useState<number>(0);
 
 
@@ -53,19 +54,23 @@ const ClientDetailsPage = () => {
 
   useEffect(() => {
     fetchClient();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  useEffect(() => {
-    fetchClient();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const isFixedWindow = client?.configuration?.algorithm === 'FIXED_WINDOW';
   const isSlidingWindow = client?.configuration?.algorithm === 'SLIDING_WINDOW';
+  const isSlidingLog = client?.configuration?.algorithm === 'SLIDING_LOG';
 
   useEffect(() => {
     if (!client?.configuration) return;
+
+    if (isSlidingLog) {
+      // Force continuous re-renders for Sliding Log to power the smooth timeline animation
+      // and recalculate expiring tokens dynamically on the fly.
+      const interval = setInterval(() => {
+        setAnimationTick(prev => prev + 1);
+      }, 50);
+      return () => clearInterval(interval);
+    }
 
     if (isFixedWindow) {
       const limit = client.configuration!.requestsPerSecond ?? 10;
@@ -99,7 +104,7 @@ const ClientDetailsPage = () => {
         const now = Date.now();
         const durationMs = client.configuration!.windowDurationMs ?? 60000;
         const currentWindow = Math.floor(now / durationMs);
-        
+
         // Note: resetTime is (currentWindow + 1) * durationMs when it was last saved
         const storedWindow = Math.floor((new Date(client.slidingWindowState.resetTime).getTime() - durationMs) / durationMs);
 
@@ -165,12 +170,14 @@ const ClientDetailsPage = () => {
 
     const endpoint = isFixedWindow
       ? 'http://localhost:3001/api/v1/rate-limit/fixed-window/memory'
-      : isSlidingWindow 
-      ? 'http://localhost:3001/api/v1/rate-limit/sliding-window/memory'
-      : 'http://localhost:3001/api/v1/rate-limit/memory';
-    const waitS = isFixedWindow || isSlidingWindow ? 61 : 12;
-    const waitMsg = isFixedWindow || isSlidingWindow ? 'for window to reset' : 'for refill';
-    
+      : isSlidingWindow
+        ? 'http://localhost:3001/api/v1/rate-limit/sliding-window/memory'
+        : isSlidingLog
+          ? 'http://localhost:3001/api/v1/rate-limit/sliding-log/memory'
+          : 'http://localhost:3001/api/v1/rate-limit/memory';
+    const waitS = isFixedWindow || isSlidingWindow || isSlidingLog ? 61 : 12;
+    const waitMsg = isFixedWindow || isSlidingWindow || isSlidingLog ? 'for window to reset' : 'for refill';
+
     let content = '';
     let filename = '';
     const fileSuffix = variant === 'advanced' ? '_advanced' : '_basic';
@@ -356,25 +363,27 @@ run_sequential 15
         }
 
         try {
-          const evaluator = isFixedWindow 
-            ? evaluateFixedWindowRateLimit 
-            : isSlidingWindow 
-            ? evaluateSlidingWindowRateLimit 
-            : evaluateRateLimit;
+          const evaluator = isFixedWindow
+            ? evaluateFixedWindowRateLimit
+            : isSlidingWindow
+              ? evaluateSlidingWindowRateLimit
+              : isSlidingLog
+                ? evaluateSlidingLogRateLimit
+                : evaluateRateLimit;
           const response = await evaluator(client.apiKey, safeCount, safeDelay);
 
           const logEntry: RequestLog = {
             id: Math.random().toString(36).substring(7),
             timestamp: new Date(),
             decision: response.decision,
-            remainingTokens: response.remainingTokens,
+            remainingTokens: response.remainingTokens ?? response.remainingRequests ?? 0,
             retryAfter: response.retryAfter,
             status: response.decision === 'ALLOW' ? 200 : 429
           };
 
           setLogs(prev => {
             const newLogs = [logEntry, ...prev];
-            return newLogs.slice(0, 50); // Keep only last 50
+            return newLogs.slice(0, 1000); // Keep up to 1000 for accurate local simulation
           });
 
           setSessionStats(prev => ({
@@ -412,10 +421,10 @@ run_sequential 15
               const now = Date.now();
               const currentWindow = Math.floor(now / durationMs);
               const calculatedResetTime = new Date((currentWindow + 1) * durationMs).toISOString();
-              
+
               const isNewWindow = prev.slidingWindowState?.currentWindow !== currentWindow.toString();
               const currentCount = isNewWindow ? 0 : (prev.slidingWindowState?.requestCount ?? 0);
-              
+
               let previousCount = prev.slidingWindowState?.previousCount ?? 0;
               if (isNewWindow) {
                 if (prev.slidingWindowState?.currentWindow === (currentWindow - 1).toString()) {
@@ -436,6 +445,13 @@ run_sequential 15
                   resetTime: response.resetTimestamp ? new Date(response.resetTimestamp * 1000).toISOString() : calculatedResetTime
                 }
               };
+            }
+
+            if (isSlidingLog) {
+              // Sliding Log: update liveTokens directly from the response
+              const remaining = response.remainingRequests ?? 0;
+              setLiveTokens(remaining);
+              return prev;
             }
 
             return {
@@ -460,7 +476,7 @@ run_sequential 15
 
           setLogs(prev => {
             const newLogs = [logEntry, ...prev];
-            return newLogs.slice(0, 50);
+            return newLogs.slice(0, 1000);
           });
 
           setSessionStats(prev => ({
@@ -493,10 +509,17 @@ run_sequential 15
     );
   }
 
-  const capacity = isFixedWindow
+  const capacity = (isFixedWindow || isSlidingWindow || isSlidingLog)
     ? (client.configuration?.requestsPerSecond || 10)
     : (client.configuration?.burstSize || 10);
-  const currentTokens = Math.floor(liveTokens);
+  let currentTokens = Math.floor(liveTokens);
+
+  if (isSlidingLog) {
+    const windowMs = client.configuration?.windowDurationMs ?? 60000;
+    const limit = client.configuration?.requestsPerSecond ?? 10;
+    const activeLogs = logs.filter(l => l.decision === 'ALLOW' && Date.now() - l.timestamp.getTime() < windowMs);
+    currentTokens = Math.max(0, limit - activeLogs.length);
+  }
   const percentFull = Math.max(0, Math.min(100, (liveTokens / capacity) * 100));
 
   return (
@@ -537,7 +560,7 @@ run_sequential 15
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                {isFixedWindow ? (
+                {(isFixedWindow || isSlidingWindow || isSlidingLog) ? (
                   <>
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-2"><Timer className="h-4 w-4" /> Window Duration</p>
@@ -625,7 +648,7 @@ run_sequential 15
                       POST
                     </span>
                     <code className="flex-1 px-3 py-2 rounded-none rounded-r-md border border-border bg-background text-sm text-muted-foreground">
-                      {isFixedWindow ? '/api/v1/rate-limit/fixed-window' : '/api/v1/rate-limit'}
+                      {isFixedWindow ? '/api/v1/rate-limit/fixed-window' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window' : isSlidingLog ? '/api/v1/rate-limit/sliding-log' : '/api/v1/rate-limit'}
                     </code>
                   </div>
                 </div>
@@ -708,23 +731,78 @@ run_sequential 15
 
               <div className="space-y-3">
                 <div className="flex justify-between items-end">
-                  <h3 className="text-sm font-medium text-muted-foreground">{isFixedWindow ? 'Window Remaining' : 'Live Bucket State'}</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    {isFixedWindow ? 'Fixed Window Capacity' : isSlidingWindow ? 'Sliding Window Allowance' : isSlidingLog ? 'Sliding Log Capacity' : 'Live Bucket State'}
+                  </h3>
                   <div className="text-xl font-bold font-mono">
                     {currentTokens} <span className="text-sm text-muted-foreground font-normal">/ {capacity}</span>
                   </div>
                 </div>
 
-                <div className="h-8 w-full bg-muted/50 rounded-lg border border-border overflow-hidden relative shadow-inner">
-                  <div
-                    className="absolute top-0 left-0 h-full bg-primary flex items-center justify-end px-2"
-                    style={{ width: `${percentFull}%` }}
-                  >
+                {isSlidingLog ? (
+                  <div className="relative w-full h-16 bg-[#0a0a0a] rounded-xl border border-border overflow-hidden shadow-inner flex flex-col justify-center">
+                    {/* Background Grid for Timeline */}
+                    <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 10%, var(--border) 10%, var(--border) 10.5%)' }} />
+
+                    {/* Time markers */}
+                    <div className="absolute top-1 right-2 text-[9px] text-teal-500/70 font-mono tracking-widest font-bold z-20">NOW</div>
+                    <div className="absolute top-1 left-2 text-[9px] text-destructive/70 font-mono tracking-widest font-bold z-20">EXPIRE</div>
+
+                    {/* Expiration Edge */}
+                    <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-destructive/20 to-transparent z-10 pointer-events-none" />
+
+                    {/* Entry Edge */}
+                    <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-teal-500/10 to-transparent z-10 pointer-events-none" />
+
+                    {/* Sliding Logs */}
+                    <div className="absolute inset-0 top-5 bottom-3 px-1">
+                      {logs.filter(l => l.decision === 'ALLOW').map((log) => {
+                        const ageMs = Date.now() - log.timestamp.getTime();
+                        const windowMs = client.configuration?.windowDurationMs ?? 60000;
+                        if (ageMs > windowMs) return null;
+
+                        const rightPercent = (ageMs / windowMs) * 100;
+
+                        return (
+                          <div
+                            key={log.id}
+                            className="absolute inset-y-0 flex items-center justify-center bg-teal-500/20 border border-teal-500 rounded shadow-[0_0_12px_rgba(20,184,166,0.4)] transition-all ease-linear"
+                            style={{
+                              right: `${rightPercent}%`,
+                              width: 'clamp(8px, 3%, 24px)',
+                              transitionDuration: '50ms'
+                            }}
+                          >
+                            <div className="h-1/2 w-0.5 bg-teal-300 rounded-full opacity-50" />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="absolute inset-0 flex justify-between px-[1%] opacity-20 pointer-events-none" style={{ backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent calc((100% / ${Math.min(capacity, 50)}) - 1px), var(--border) calc((100% / ${Math.min(capacity, 50)}) - 1px), var(--border) calc(100% / ${Math.min(capacity, 50)}))` }}>
+                ) : isFixedWindow ? (
+                  <div className="flex w-full h-8 bg-muted/50 rounded-lg border border-border overflow-hidden relative shadow-inner">
+                    {Array.from({ length: Math.min(capacity, 50) }).map((_, i) => (
+                      <div key={i} className={`flex-1 border-r border-border/50 last:border-0 transition-colors duration-200 ${i < currentTokens ? 'bg-amber-500' : 'bg-transparent'}`} />
+                    ))}
                   </div>
-                </div>
+                ) : isSlidingWindow ? (
+                  <div className="h-8 w-full bg-muted/50 rounded-lg border border-border overflow-hidden relative shadow-inner">
+                    <div
+                      className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-300"
+                      style={{ width: `${percentFull}%` }}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-8 w-full bg-muted/50 rounded-lg border border-border overflow-hidden relative shadow-inner">
+                    <div
+                      className="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${percentFull}%` }}
+                    />
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground text-right">
-                  {isFixedWindow ? 'Visualization represents remaining requests in current window.' : 'Visualization represents currently available tokens.'}
+                  {isFixedWindow ? 'Visualization represents remaining requests before the rigid window resets.' : isSlidingWindow ? 'Visualization represents remaining requests based on overlapping window estimation.' : isSlidingLog ? 'Visualization represents exact available spots in the sliding time window.' : 'Visualization represents currently available tokens in the bucket.'}
                 </p>
               </div>
 
@@ -813,10 +891,10 @@ run_sequential 15
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Endpoint:</span>
                   <code className="text-primary font-semibold">
-                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window/memory' : '/api/v1/rate-limit/memory'}
+                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window/memory' : isSlidingLog ? '/api/v1/rate-limit/sliding-log/memory' : '/api/v1/rate-limit/memory'}
                   </code>
                 </div>
-                {isFixedWindow || isSlidingWindow ? (
+                {isFixedWindow || isSlidingWindow || isSlidingLog ? (
                   <>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">Default Limit:</span>
@@ -864,7 +942,7 @@ run_sequential 15
       <Modal
         isOpen={isDownloadModalOpen}
         onClose={() => setIsDownloadModalOpen(false)}
-        title={`Download ${isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : 'Token Bucket'} Scripts`}
+        title={`Download ${isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : isSlidingLog ? 'Sliding Log' : 'Token Bucket'} Scripts`}
         description="Choose the type of load testing script you want to download."
         className="max-w-2xl"
       >
@@ -875,10 +953,11 @@ run_sequential 15
               Basic Sandbox Script (IP-Based)
             </h4>
             <p className="text-sm text-muted-foreground">
-              A perfectly isolated script that hits the in-memory endpoint using your IP address. 
+              A perfectly isolated script that hits the in-memory endpoint using your IP address.
+              {isSlidingLog && " Watch how each request is individually timestamped and the log precisely tracks your window."}
               {isSlidingWindow && " Watch how your capacity smoothly regenerates over the window overlap."}
               {isFixedWindow && " Watch how requests are hard-blocked until the exact moment the window resets."}
-              {!isFixedWindow && !isSlidingWindow && " Watch how your tokens are steadily refilled second by second."}
+              {!isFixedWindow && !isSlidingWindow && !isSlidingLog && " Watch how your tokens are steadily refilled second by second."}
               Ideal for running simple local tests.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -894,8 +973,8 @@ run_sequential 15
               Advanced Multi-Client Script (Simulated Users)
             </h4>
             <p className="text-sm text-muted-foreground">
-              A high-performance script that injects unique <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id</code> headers 
-              to simulate hundreds of <strong>completely distinct users</strong> hammering the {isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : 'Token Bucket'} 
+              A high-performance script that injects unique <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id</code> headers
+              to simulate hundreds of <strong>completely distinct users</strong> hammering the {isSlidingLog ? 'Sliding Log' : isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : 'Token Bucket'}
               algorithm at the exact same time. Essential for testing concurrent system isolation.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">

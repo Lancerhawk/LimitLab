@@ -21,4 +21,10 @@ router.get('/sliding-window', RateLimitController.processSlidingWindow);
 router.post('/sliding-window/memory', RateLimitController.processSlidingWindowMemory);
 router.get('/sliding-window/memory', RateLimitController.processSlidingWindowMemory);
 
+router.post('/sliding-log', RateLimitController.processSlidingLog);
+router.get('/sliding-log', RateLimitController.processSlidingLog);
+
+router.post('/sliding-log/memory', RateLimitController.processSlidingLogMemory);
+router.get('/sliding-log/memory', RateLimitController.processSlidingLogMemory);
+
 export default router;

@@ -12,6 +12,7 @@ enum RateLimitAlgorithm {
   TOKEN_BUCKET
   FIXED_WINDOW
   SLIDING_WINDOW
+  SLIDING_LOG
 }
 
 enum RequestDecision {
@@ -35,6 +36,7 @@ model Client {
   slidingWindowState SlidingWindowState?
   statistics    ClientStatistics?
   requestLogs   RequestLog[]
+  slidingLogRequests SlidingLogRequest[]
 
   @@map("clients")
 }
@@ -140,4 +142,17 @@ model RequestLog {
   // Composite index for time-series aggregation per client
   @@index([clientId, timestamp])
   @@map("request_logs")
+}
+
+model SlidingLogRequest {
+  id               String   @id @default(uuid())
+  clientId         String
+  requestTimestamp BigInt
+  createdAt        DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Composite index for fast expiration cleanup and counting
+  @@index([clientId, requestTimestamp])
+  @@map("sliding_log_requests")
 }

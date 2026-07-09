@@ -2,8 +2,10 @@ import api from './axios';
 
 export interface RateLimitResponse {
   decision: 'ALLOW' | 'DENY';
-  capacity: number;
-  remainingTokens: number;
+  capacity?: number;
+  remainingTokens?: number;
+  limit?: number;
+  remainingRequests?: number;
   requestCount?: number;
   retryAfter?: number;
   retryAfterSeconds?: number;
@@ -57,6 +59,26 @@ export const evaluateSlidingWindowRateLimit = async (
 ): Promise<RateLimitResponse> => {
   const response = await api.post(
     '/rate-limit/sliding-window',
+    { apiKey, requestCount, delayMs },
+    {
+      validateStatus: (status) => status === 200 || status === 429 || status === 400
+    }
+  );
+
+  if (response.status === 400) {
+    throw new Error(response.data.error || 'Validation error');
+  }
+
+  return response.data;
+};
+
+export const evaluateSlidingLogRateLimit = async (
+  apiKey: string,
+  requestCount?: number,
+  delayMs?: number
+): Promise<RateLimitResponse> => {
+  const response = await api.post(
+    '/rate-limit/sliding-log',
     { apiKey, requestCount, delayMs },
     {
       validateStatus: (status) => status === 200 || status === 429 || status === 400

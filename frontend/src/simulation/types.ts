@@ -1,4 +1,4 @@
-export type AlgorithmType = 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW';
+export type AlgorithmType = 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG';
 
 export interface SimulationConfig {
   algorithm: AlgorithmType;
@@ -35,6 +35,10 @@ export interface SlidingWindowState {
   previousWindowStartMs: number;
 }
 
+export interface SlidingLogState {
+  timestamps: number[];
+}
+
 export interface HistoryPoint {
   timeMs: number;
   tokens: number;
@@ -54,6 +58,7 @@ export interface SimulationState {
   isRunning: boolean;
   isPaused: boolean;
   isComplete: boolean;
+  slidingLogTimestamps?: number[];
 }
 
 export interface SimulationStats {

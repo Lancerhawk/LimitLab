@@ -122,6 +122,24 @@ export class ClientService {
             resetTime: resetTime,
           }
         });
+      } else if (algorithm === RateLimitAlgorithm.SLIDING_LOG) {
+        const windowDurationMs = data.windowDurationMs ?? 60000;
+        const requestLimit = data.requestLimit ?? 10;
+
+        await tx.slidingLogRequest.deleteMany({
+          where: { clientId: client.id }
+        });
+
+        await tx.rateLimitConfiguration.create({
+          data: {
+            clientId: client.id,
+            algorithm: RateLimitAlgorithm.SLIDING_LOG,
+            requestsPerSecond: requestLimit,
+            windowDurationMs: windowDurationMs,
+          }
+        });
+        // No explicit state model needed for Sliding Log initially,
+        // timestamps are created dynamically on requests.
       }
 
       await tx.clientStatistics.create({
@@ -193,7 +211,7 @@ export class ClientService {
             }
           });
         }
-      } else if (config?.algorithm === RateLimitAlgorithm.SLIDING_WINDOW) {
+      } else if (config?.algorithm === RateLimitAlgorithm.SLIDING_WINDOW || config?.algorithm === RateLimitAlgorithm.SLIDING_LOG) {
         if (data.windowDurationMs !== undefined || data.requestLimit !== undefined) {
           await tx.rateLimitConfiguration.update({
             where: { clientId: id },
@@ -202,6 +220,11 @@ export class ClientService {
               requestsPerSecond: data.requestLimit,
             }
           });
+          
+          if (config?.algorithm === RateLimitAlgorithm.SLIDING_LOG) {
+            // Optional: When updating config, we could clear the log or just let it naturally expire based on the new window
+            // We'll let it naturally expire, no need to delete.
+          }
         }
       }
 

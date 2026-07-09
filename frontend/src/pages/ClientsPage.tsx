@@ -5,24 +5,24 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Card, CardContent } from '../components/ui/Card';
-import { Users, Plus, Key, Trash2, Cpu, Activity, Clock, Pencil, AlertTriangle, Timer } from 'lucide-react';
+import { Users, Plus, Key, Trash2, Cpu, Activity, Clock, Pencil, AlertTriangle, Timer, ChevronDown } from 'lucide-react';
 import { getClients, createClient, updateClient, deleteClient, type Client } from '../api/clients';
 
 const ClientsPage = () => {
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  
+
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [algorithm, setAlgorithm] = useState<'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW'>('TOKEN_BUCKET');
+  const [algorithm, setAlgorithm] = useState<'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG'>('TOKEN_BUCKET');
   const [capacity, setCapacity] = useState('10');
   const [refillRate, setRefillRate] = useState('0.1');
   const [windowDurationMs, setWindowDurationMs] = useState('60000');
@@ -64,7 +64,7 @@ const ClientsPage = () => {
     setSelectedClient(client);
     setName(client.name);
     setDescription(client.description || '');
-    const algo = (client.configuration?.algorithm as 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW') || 'TOKEN_BUCKET';
+    const algo = (client.configuration?.algorithm as 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG') || 'TOKEN_BUCKET';
     setAlgorithm(algo);
     if (algo === 'TOKEN_BUCKET') {
       setCapacity(client.configuration?.burstSize?.toString() || '10');
@@ -187,17 +187,20 @@ const ClientsPage = () => {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Window Duration</label>
-          <select
-            className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={windowDurationMs}
-            onChange={(e) => setWindowDurationMs(e.target.value)}
-            disabled={isSubmitting}
-          >
-            <option value="10000">10 seconds</option>
-            <option value="30000">30 seconds</option>
-            <option value="60000">60 seconds</option>
-            <option value="300000">5 minutes</option>
-          </select>
+          <div className="relative">
+            <select
+              className="flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={windowDurationMs}
+              onChange={(e) => setWindowDurationMs(e.target.value)}
+              disabled={isSubmitting}
+            >
+              <option value="10000">10 seconds</option>
+              <option value="30000">30 seconds</option>
+              <option value="60000">60 seconds</option>
+              <option value="300000">5 minutes</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
+          </div>
           <p className="text-xs text-muted-foreground">Length of each fixed time window.</p>
         </div>
         <div className="space-y-2">
@@ -220,8 +223,8 @@ const ClientsPage = () => {
             <div className="pr-2">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-lg">{client.name}</h3>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                  {isTokenBucket ? 'Token Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : 'Fixed Window'}
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : algo === 'SLIDING_LOG' ? 'bg-teal-500/10 text-teal-500 border-teal-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                  {isTokenBucket ? 'Token Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : algo === 'SLIDING_LOG' ? 'Sliding Log' : 'Fixed Window'}
                 </span>
               </div>
               {client.description && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{client.description}</p>}
@@ -235,7 +238,7 @@ const ClientsPage = () => {
               </Button>
             </div>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border/50">
               <Key className="h-4 w-4 text-primary/70 shrink-0" />
@@ -243,7 +246,7 @@ const ClientsPage = () => {
                 {client.apiKey}
               </code>
             </div>
-            
+
             {isTokenBucket ? (
               <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
                 <div className="flex items-center gap-2">
@@ -282,7 +285,7 @@ const ClientsPage = () => {
                 <div className="flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-amber-500/70 ml-1.5 mr-1" />
                   <span className="text-muted-foreground">Count:</span>
-                  <span className="font-medium">{algo === 'SLIDING_WINDOW' ? client.slidingWindowState?.requestCount ?? 'N/A' : client.windowState?.requestCount ?? 'N/A'}</span>
+                  <span className="font-medium">{algo === 'SLIDING_WINDOW' ? client.slidingWindowState?.requestCount ?? 'N/A' : algo === 'SLIDING_LOG' ? 'Log-based' : client.windowState?.requestCount ?? 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`h-1.5 w-1.5 rounded-full ml-1.5 mr-1 ${client.isActive ? 'bg-green-500' : 'bg-destructive'}`} />
@@ -291,7 +294,7 @@ const ClientsPage = () => {
                 </div>
               </div>
             )}
-            
+
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground pt-4 border-t border-border/50">
               <div className="flex items-center gap-2">
                 <Clock className="h-3 w-3" />
@@ -310,16 +313,16 @@ const ClientsPage = () => {
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <PageHeader 
-          title="Clients" 
-          description="Manage API keys and rate limit configurations for your consumers." 
+        <PageHeader
+          title="Clients"
+          description="Manage API keys and rate limit configurations for your consumers."
         />
         <Button onClick={handleOpenCreate} className="gap-2">
           <Plus className="h-4 w-4" />
           New Client
         </Button>
       </div>
-      
+
       {loading ? (
         <div className="flex items-center justify-center min-h-[300px]">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
@@ -342,9 +345,9 @@ const ClientsPage = () => {
       )}
 
       {/* CREATE MODAL */}
-      <Modal 
-        isOpen={isCreateModalOpen} 
-        onClose={() => setIsCreateModalOpen(false)} 
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
         title="Create New Client"
         description="Configure a new consumer with an API key and rate limits."
       >
@@ -353,7 +356,7 @@ const ClientsPage = () => {
             <label className="text-sm font-medium">Client Name</label>
             <Input placeholder="e.g. Mobile App" value={name} onChange={(e) => setName(e.target.value)} required disabled={isSubmitting} />
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Description (Optional)</label>
             <Input placeholder="Internal iOS application" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isSubmitting} />
@@ -366,11 +369,10 @@ const ClientsPage = () => {
                 type="button"
                 onClick={() => setAlgorithm('TOKEN_BUCKET')}
                 disabled={isSubmitting}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  algorithm === 'TOKEN_BUCKET'
+                className={`p-3 rounded-lg border-2 text-left transition-all ${algorithm === 'TOKEN_BUCKET'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-primary/30'
-                }`}
+                  }`}
               >
                 <p className="text-sm font-semibold">Token Bucket</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Smooth rate limiting with burst support</p>
@@ -379,11 +381,10 @@ const ClientsPage = () => {
                 type="button"
                 onClick={() => setAlgorithm('FIXED_WINDOW')}
                 disabled={isSubmitting}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  algorithm === 'FIXED_WINDOW'
+                className={`p-3 rounded-lg border-2 text-left transition-all ${algorithm === 'FIXED_WINDOW'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-primary/30'
-                }`}
+                  }`}
               >
                 <p className="text-sm font-semibold">Fixed Window</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Counter resets at fixed intervals</p>
@@ -392,14 +393,25 @@ const ClientsPage = () => {
                 type="button"
                 onClick={() => setAlgorithm('SLIDING_WINDOW')}
                 disabled={isSubmitting}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  algorithm === 'SLIDING_WINDOW'
+                className={`p-3 rounded-lg border-2 text-left transition-all ${algorithm === 'SLIDING_WINDOW'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-primary/30'
-                }`}
+                  }`}
               >
                 <p className="text-sm font-semibold">Sliding Window</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Smooth rate limiting with overlapping intervals</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlgorithm('SLIDING_LOG')}
+                disabled={isSubmitting}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${algorithm === 'SLIDING_LOG'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'
+                  }`}
+              >
+                <p className="text-sm font-semibold">Sliding Log</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Highly accurate timestamp-based windowing</p>
               </button>
             </div>
           </div>
@@ -414,9 +426,9 @@ const ClientsPage = () => {
       </Modal>
 
       {/* EDIT MODAL */}
-      <Modal 
-        isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)} 
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
         title="Edit Client Configuration"
         description={`Update settings for ${selectedClient?.name}`}
       >
@@ -425,7 +437,7 @@ const ClientsPage = () => {
             <label className="text-sm font-medium">Client Name</label>
             <Input placeholder="e.g. Mobile App" value={name} onChange={(e) => setName(e.target.value)} required disabled={isSubmitting} />
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Description (Optional)</label>
             <Input placeholder="Internal iOS application" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isSubmitting} />
@@ -434,7 +446,7 @@ const ClientsPage = () => {
           <div className="space-y-2">
             <label className="text-sm font-medium">Algorithm</label>
             <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-sm text-muted-foreground">
-              {selectedClient?.configuration?.algorithm === 'FIXED_WINDOW' ? 'Fixed Window' : selectedClient?.configuration?.algorithm === 'SLIDING_WINDOW' ? 'Sliding Window' : 'Token Bucket'}
+              {selectedClient?.configuration?.algorithm === 'FIXED_WINDOW' ? 'Fixed Window' : selectedClient?.configuration?.algorithm === 'SLIDING_WINDOW' ? 'Sliding Window' : selectedClient?.configuration?.algorithm === 'SLIDING_LOG' ? 'Sliding Log' : 'Token Bucket'}
               <span className="text-xs ml-2 italic">(Cannot be changed after creation)</span>
             </div>
           </div>
@@ -449,9 +461,9 @@ const ClientsPage = () => {
       </Modal>
 
       {/* DELETE MODAL */}
-      <Modal 
-        isOpen={isDeleteModalOpen} 
-        onClose={() => setIsDeleteModalOpen(false)} 
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
         title="Delete Client"
       >
         <div className="pt-2">

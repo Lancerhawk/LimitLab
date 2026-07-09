@@ -64,33 +64,30 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = React.memo(({
   };
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+    <div className={`grid gap-6 md:grid-cols-2 ${isComparisonMode ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} mb-6`}>
       <Card className="col-span-full lg:col-span-1">
         <CardContent className="p-4 space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Algorithm</label>
-            <div className="relative">
-              <select
-                className="flex h-10 w-full appearance-none rounded-md border border-input bg-card/50 px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-                value={config.algorithm}
-                onChange={handleAlgorithmChange}
-                disabled={isRunning || isPaused || isComparisonMode}
-              >
-                {isComparisonMode ? (
-                  <option value="TOKEN_BUCKET" className="bg-card text-foreground">Token Bucket vs Fixed Window</option>
-                ) : (
-                  <>
-                    <option value="TOKEN_BUCKET" className="bg-card text-foreground">Token Bucket</option>
-                    <option value="FIXED_WINDOW" className="bg-card text-foreground">Fixed Window</option>
-                    <option value="SLIDING_WINDOW" className="bg-card text-foreground">Sliding Window Counter</option>
-                  </>
-                )}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+          {!isComparisonMode && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Algorithm</label>
+              <div className="relative">
+                <select
+                  className="flex h-10 w-full appearance-none rounded-md border border-input bg-card/50 px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                  value={config.algorithm}
+                  onChange={handleAlgorithmChange}
+                  disabled={isRunning || isPaused}
+                >
+                  <option value="TOKEN_BUCKET" className="bg-card text-foreground">Token Bucket</option>
+                  <option value="FIXED_WINDOW" className="bg-card text-foreground">Fixed Window</option>
+                  <option value="SLIDING_WINDOW" className="bg-card text-foreground">Sliding Window Counter</option>
+                  <option value="SLIDING_LOG" className="bg-card text-foreground">Sliding Log</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Duration (seconds)</label>
@@ -129,58 +126,60 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = React.memo(({
         </CardContent>
       </Card>
 
-      <Card className="col-span-full lg:col-span-1">
-        <CardContent className="p-4 space-y-4">
-          {config.algorithm === 'TOKEN_BUCKET' ? (
-            <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Bucket Capacity</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={config.capacity}
-                  onChange={(e) => updateConfig({ capacity: Number(e.target.value) })}
-                  disabled={isRunning || isPaused}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Refill Rate (tokens/sec)</label>
-                <Input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={config.refillRate}
-                  onChange={(e) => updateConfig({ refillRate: Number(e.target.value) })}
-                  disabled={isRunning || isPaused}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Request Limit</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={config.requestLimit}
-                  onChange={(e) => updateConfig({ requestLimit: Number(e.target.value) })}
-                  disabled={isRunning || isPaused}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Window Duration (seconds)</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={config.windowDurationMs / 1000}
-                  onChange={(e) => updateConfig({ windowDurationMs: Number(e.target.value) * 1000 })}
-                  disabled={isRunning || isPaused}
-                />
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {!isComparisonMode && (
+        <Card className="col-span-full lg:col-span-1">
+          <CardContent className="p-4 space-y-4">
+            {config.algorithm === 'TOKEN_BUCKET' ? (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Bucket Capacity</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={config.capacity}
+                    onChange={(e) => updateConfig({ capacity: Number(e.target.value) })}
+                    disabled={isRunning || isPaused}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Refill Rate (tokens/sec)</label>
+                  <Input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={config.refillRate}
+                    onChange={(e) => updateConfig({ refillRate: Number(e.target.value) })}
+                    disabled={isRunning || isPaused}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Request Limit</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={config.requestLimit}
+                    onChange={(e) => updateConfig({ requestLimit: Number(e.target.value) })}
+                    disabled={isRunning || isPaused}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Window Duration (seconds)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={config.windowDurationMs / 1000}
+                    onChange={(e) => updateConfig({ windowDurationMs: Number(e.target.value) * 1000 })}
+                    disabled={isRunning || isPaused}
+                  />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="col-span-full lg:col-span-1">
         <CardContent className="p-4 space-y-3">

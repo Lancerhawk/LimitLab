@@ -4,7 +4,7 @@
 
 # LimitLab
 
-![Version](https://img.shields.io/badge/version-0.6.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)
 > 🚧 **Under Construction:** LimitLab is currently in active development. Features, database architecture, and APIs are actively being built and are subject to change. 🚧
 
 Real-Time Rate Limiting Playground.

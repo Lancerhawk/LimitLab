@@ -8,9 +8,61 @@ import { SlidingWindowVisualizer } from '../simulation/components/SlidingWindowV
 import { SimulatorCharts } from '../simulation/components/SimulatorCharts';
 import { SimulatorStats } from '../simulation/components/SimulatorStats';
 import { BarChart3 } from 'lucide-react';
+import type { AlgorithmType } from '../simulation/types';
+
+const ALGO_LABELS: Record<AlgorithmType, string> = {
+  TOKEN_BUCKET: 'Token Bucket',
+  FIXED_WINDOW: 'Fixed Window',
+  SLIDING_WINDOW: 'Sliding Window',
+  SLIDING_LOG: 'Sliding Log',
+};
+
+const ALGO_COLORS: Record<AlgorithmType, string> = {
+  TOKEN_BUCKET: 'border-blue-500/40',
+  FIXED_WINDOW: 'border-amber-500/40',
+  SLIDING_WINDOW: 'border-purple-500/40',
+  SLIDING_LOG: 'border-teal-500/40',
+};
+
+const AlgorithmConfiguration = ({ config, updateConfig, disabled }: { config: any, updateConfig: any, disabled: boolean }) => {
+  if (config.algorithm === 'TOKEN_BUCKET') {
+    return (
+      <div className="flex flex-col sm:flex-row gap-4 mt-4">
+        <div className="flex-1 space-y-1.5">
+          <label className="text-xs font-medium text-foreground">Capacity</label>
+          <input type="number" min="1" value={config.capacity} onChange={(e) => updateConfig({ capacity: Number(e.target.value) })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
+        </div>
+        <div className="flex-1 space-y-1.5">
+          <label className="text-xs font-medium text-foreground">Refill /sec</label>
+          <input type="number" min="0.1" step="0.1" value={config.refillRate} onChange={(e) => updateConfig({ refillRate: Number(e.target.value) })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 mt-4">
+      <div className="flex-1 space-y-1.5">
+        <label className="text-xs font-medium text-foreground">Request Limit</label>
+        <input type="number" min="1" value={config.requestLimit} onChange={(e) => updateConfig({ requestLimit: Number(e.target.value) })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
+      </div>
+      <div className="flex-1 space-y-1.5">
+        <label className="text-xs font-medium text-foreground">Window Size (s)</label>
+        <input type="number" min="1" value={config.windowDurationMs / 1000} onChange={(e) => updateConfig({ windowDurationMs: Number(e.target.value) * 1000 })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
+      </div>
+    </div>
+  );
+};
+
+const AlgoVisualizer = ({ config, state }: { config: any; state: any }) => {
+  if (config.algorithm === 'SLIDING_WINDOW' || config.algorithm === 'SLIDING_LOG') {
+    return <SlidingWindowVisualizer config={config} state={state} />;
+  }
+  return <BucketVisualizer config={config} state={state} />;
+};
 
 export const SimulatorPage = () => {
   const [comparisonMode, setComparisonMode] = useState(false);
+  const [algo2, setAlgo2] = useState<AlgorithmType>('FIXED_WINDOW');
 
   const sim1 = useSimulation();
   const sim2 = useSimulation({
@@ -23,21 +75,22 @@ export const SimulatorPage = () => {
     playbackSpeed: 1,
   });
 
-
+  // Sync sim2 algorithm when user picks a new comparison target
   useEffect(() => {
     if (comparisonMode) {
-      sim1.updateConfig({ algorithm: 'TOKEN_BUCKET' });
+      sim2.updateConfig({ algorithm: algo2 });
     }
-  }, [comparisonMode]);
+  }, [comparisonMode, algo2]);
 
-
+  // Sync traffic from sim1 to sim2 whenever comparison is activated or sim1 traffic changes
+  // Do not sync if sim1 just finished (isComplete = true), because setTraffic resets the engine state!
   useEffect(() => {
-    if (comparisonMode) {
+    if (comparisonMode && !sim1.state.isRunning && !sim1.state.isPaused && !sim1.state.isComplete) {
       sim2.setTraffic(sim1.traffic);
     }
-  }, [comparisonMode]);
+  }, [comparisonMode, sim1.traffic, sim1.state.isRunning, sim1.state.isPaused, sim1.state.isComplete]);
 
-
+  // Sync duration
   useEffect(() => {
     if (comparisonMode && sim1.config.durationMs !== sim2.config.durationMs) {
       sim2.updateConfig({ durationMs: sim1.config.durationMs });
@@ -45,6 +98,10 @@ export const SimulatorPage = () => {
   }, [comparisonMode, sim1.config.durationMs]);
 
   const handleStart = () => {
+    if (comparisonMode) {
+      // Re-sync traffic right before starting so both sims have the exact same events
+      sim2.setTraffic(sim1.traffic);
+    }
     sim1.start();
     if (comparisonMode) sim2.start();
   };
@@ -96,6 +153,58 @@ export const SimulatorPage = () => {
         </button>
       </PageHeader>
 
+      {comparisonMode && (
+        <div className="flex flex-col lg:flex-row items-stretch justify-center gap-4 mb-6">
+          <div className="flex-1 p-4 bg-muted/20 rounded-xl border border-border/30">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Simulator A</div>
+            </div>
+            <div className="relative">
+              <select
+                className="w-full appearance-none rounded-md border border-input bg-card px-3 py-1.5 text-sm font-semibold shadow-sm cursor-pointer hover:border-primary/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary pr-8"
+                value={sim1.config.algorithm}
+                onChange={(e) => sim1.updateConfig({ algorithm: e.target.value as AlgorithmType })}
+                disabled={sim1.state.isRunning || sim1.state.isPaused}
+              >
+                {(Object.keys(ALGO_LABELS) as AlgorithmType[]).map(a => (
+                  <option key={a} value={a}>{ALGO_LABELS[a]}</option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-muted-foreground">
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+            <AlgorithmConfiguration config={sim1.config} updateConfig={sim1.updateConfig} disabled={sim1.state.isRunning || sim1.state.isPaused} />
+          </div>
+
+          <div className="flex items-center justify-center">
+            <span className="text-sm font-bold tracking-widest text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">VS</span>
+          </div>
+
+          <div className="flex-1 p-4 bg-muted/20 rounded-xl border border-border/30">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Simulator B</div>
+            </div>
+            <div className="relative">
+              <select
+                className="w-full appearance-none rounded-md border border-input bg-card px-3 py-1.5 text-sm font-semibold shadow-sm cursor-pointer hover:border-primary/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary pr-8"
+                value={algo2}
+                onChange={(e) => setAlgo2(e.target.value as AlgorithmType)}
+                disabled={sim1.state.isRunning || sim1.state.isPaused}
+              >
+                {(Object.keys(ALGO_LABELS) as AlgorithmType[]).map(a => (
+                  <option key={a} value={a}>{ALGO_LABELS[a]}</option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-muted-foreground">
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+            <AlgorithmConfiguration config={sim2.config} updateConfig={sim2.updateConfig} disabled={sim1.state.isRunning || sim1.state.isPaused} />
+          </div>
+        </div>
+      )}
+
       <SimulatorControls
         config={sim1.config}
         isRunning={sim1.state.isRunning}
@@ -120,67 +229,90 @@ export const SimulatorPage = () => {
         onStep={handleStep}
         onSetPlaybackSpeed={handleSetPlaybackSpeed}
       />
+      <div className="space-y-6">
+        <div>
+          {comparisonMode && <h3 className="text-sm font-bold mb-3 text-muted-foreground uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span> Simulator A Timeline</h3>}
+          <SimulatorTimeline
+            durationMs={sim1.config.durationMs}
+            currentTimeMs={sim1.state.timeMs}
+            traffic={sim1.traffic}
+            isRunning={sim1.state.isRunning}
+            onAddEvent={(e) => {
+              sim1.addTrafficEvent(e);
+            }}
+            onRemoveEvent={(id) => {
+              sim1.removeTrafficEvent(id);
+            }}
+            onMoveEvent={(id, t) => {
+              sim1.moveTrafficEvent(id, t);
+            }}
+          />
+        </div>
 
-      <SimulatorTimeline
-        durationMs={sim1.config.durationMs}
-        currentTimeMs={sim1.state.timeMs}
-        traffic={sim1.traffic}
-        isRunning={sim1.state.isRunning}
-        onAddEvent={(e) => {
-          sim1.addTrafficEvent(e);
-          if (comparisonMode) sim2.addTrafficEvent(e);
-        }}
-        onRemoveEvent={(id) => {
-          sim1.removeTrafficEvent(id);
-          if (comparisonMode) sim2.removeTrafficEvent(id);
-        }}
-        onMoveEvent={(id, t) => {
-          sim1.moveTrafficEvent(id, t);
-          if (comparisonMode) sim2.moveTrafficEvent(id, t);
-        }}
-      />
+        {comparisonMode && (
+          <div>
+            <h3 className="text-sm font-bold mb-3 text-muted-foreground uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span> Simulator B Timeline</h3>
+            <div className="pointer-events-none">
+              <SimulatorTimeline
+                durationMs={sim2.config.durationMs}
+                currentTimeMs={sim2.state.timeMs}
+                traffic={sim2.traffic}
+                isRunning={sim2.state.isRunning}
+                onAddEvent={() => {}}
+                onRemoveEvent={() => {}}
+                onMoveEvent={() => {}}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 text-center">Edit Simulator A's timeline above to sync traffic to Simulator B.</p>
+          </div>
+        )}
+      </div>
 
       {comparisonMode ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mt-8">
+        <div className="space-y-6 mt-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            {/* LEFT: sim1 (primary algorithm) */}
+            <div className={`space-y-6 rounded-xl border-2 ${ALGO_COLORS[sim1.config.algorithm]} p-5 bg-card/30`}>
+              <h2 className="text-lg font-bold text-center pb-3 border-b border-border/30">{ALGO_LABELS[sim1.config.algorithm]}</h2>
+              <AlgoVisualizer config={sim1.config} state={sim1.state} />
+              <SimulatorStats stats={sim1.stats} isComparisonMode={true} />
+              {sim1Complete ? (
+                <SimulatorCharts
+                  history={sim1.state.history}
+                  capacity={sim1.config.algorithm === 'TOKEN_BUCKET' ? sim1.config.capacity : sim1.config.requestLimit}
+                  isComparisonMode={true}
+                />
+              ) : (
+                <ChartPlaceholder />
+              )}
+            </div>
 
-          <div className="space-y-6">
-            <h2 className="text-xl font-bold text-center border-b border-border/40 pb-4">Token Bucket</h2>
-            <BucketVisualizer config={sim1.config} state={sim1.state} />
-            <SimulatorStats stats={sim1.stats} isComparisonMode={true} />
-
-            {sim1Complete ? (
-              <SimulatorCharts history={sim1.state.history} capacity={sim1.config.capacity} isComparisonMode={true} />
-            ) : (
-              <ChartPlaceholder />
-            )}
-          </div>
-
-
-          <div className="space-y-6 border-t pt-8 xl:border-t-0 xl:pt-0 xl:border-l xl:border-border/40 xl:pl-8">
-            <h2 className="text-xl font-bold text-center border-b border-border/40 pb-4">Fixed Window</h2>
-            {sim2.state && sim2.stats && (
-              <>
-                <BucketVisualizer config={sim2.config} state={sim2.state} />
-                <SimulatorStats stats={sim2.stats} isComparisonMode={true} />
-
-                {sim2Complete ? (
-                  <SimulatorCharts history={sim2.state.history} capacity={sim2.config.requestLimit} isComparisonMode={true} />
-                ) : (
-                  <ChartPlaceholder />
-                )}
-              </>
-            )}
+            {/* RIGHT: sim2 (comparison algorithm) */}
+            <div className={`space-y-6 rounded-xl border-2 ${ALGO_COLORS[algo2]} p-5 bg-card/30`}>
+              <h2 className="text-lg font-bold text-center pb-3 border-b border-border/30">{ALGO_LABELS[algo2]}</h2>
+              {sim2.state && sim2.stats && (
+                <>
+                  <AlgoVisualizer config={sim2.config} state={sim2.state} />
+                  <SimulatorStats stats={sim2.stats} isComparisonMode={true} />
+                  {sim2Complete ? (
+                    <SimulatorCharts
+                      history={sim2.state.history}
+                      capacity={sim2.config.algorithm === 'TOKEN_BUCKET' ? sim2.config.capacity : sim2.config.requestLimit}
+                      isComparisonMode={true}
+                    />
+                  ) : (
+                    <ChartPlaceholder />
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       ) : (
         <div className="mt-8 space-y-6">
           <div className="flex justify-center">
             <div className="w-full max-w-2xl">
-              {sim1.config.algorithm === 'SLIDING_WINDOW' ? (
-                <SlidingWindowVisualizer config={sim1.config} state={sim1.state} />
-              ) : (
-                <BucketVisualizer config={sim1.config} state={sim1.state} />
-              )}
+              <AlgoVisualizer config={sim1.config} state={sim1.state} />
             </div>
           </div>
           <SimulatorStats stats={sim1.stats} />

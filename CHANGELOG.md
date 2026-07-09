@@ -2,6 +2,28 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [0.8.0] - 2026-07-10
+### Added
+- Implemented production-grade Sliding Log rate limiting algorithm
+- Added PostgreSQL-backed Sliding Log implementation with persistent timestamp storage
+- Built high-performance in-memory Sliding Log implementation using bounded LRU cache
+- Implemented timestamp-based request tracking with automatic expiration of stale entries
+- Added efficient sliding window cleanup for both database and in-memory implementations
+- Integrated Sliding Log into the existing client configuration workflow
+- Extended algorithm selection to support Token Bucket, Fixed Window, Sliding Window Counter, and Sliding Log
+- Added dedicated Sliding Log API endpoints for database-backed and in-memory implementations
+- Integrated Sliding Log into the existing Playground without altering the testing experience
+- Extended the Simulation page to visualize active request timestamps and automatic expiration
+- Added timeline visualization demonstrating Sliding Log behavior in real time
+- Implemented standard HTTP rate-limiting headers including Retry-After and X-RateLimit-Reset
+- Created comprehensive TypeScript load-testing suite covering burst traffic, expiration behavior, and sliding window validation
+- Added downloadable JavaScript load-testing script for external developer testing
+- Implemented backend validation, production-grade error handling, and consistent response formatting
+- Added comprehensive documentation explaining Sliding Log architecture, advantages, disadvantages, complexity, and real-world use cases
+- Compared Sliding Log against Token Bucket, Fixed Window, and Sliding Window Counter within project documentation
+- Preserved compatibility with all existing algorithms, Playground, Simulation, client management, and testing infrastructure
+- Verified mathematical correctness, timestamp expiration, concurrency safety, and production behavior through comprehensive automated load testing
+
 ## [0.7.0] - 2026-07-09
 ### Added
 - Implemented a complete, production-grade PostgreSQL-backed Sliding Window Counter algorithm.
