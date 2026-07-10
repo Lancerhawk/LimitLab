@@ -1,4 +1,4 @@
-export type AlgorithmType = 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG';
+export type AlgorithmType = 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG' | 'LEAKY_BUCKET';
 
 export interface SimulationConfig {
   algorithm: AlgorithmType;
@@ -39,6 +39,11 @@ export interface SlidingLogState {
   timestamps: number[];
 }
 
+export interface LeakyBucketState {
+  queueLength: number;
+  lastLeakTimeMs: number;
+}
+
 export interface HistoryPoint {
   timeMs: number;
   tokens: number;
@@ -59,6 +64,7 @@ export interface SimulationState {
   isPaused: boolean;
   isComplete: boolean;
   slidingLogTimestamps?: number[];
+  queueLength?: number;
 }
 
 export interface SimulationStats {

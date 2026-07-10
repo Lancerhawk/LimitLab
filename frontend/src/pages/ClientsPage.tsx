@@ -22,7 +22,7 @@ const ClientsPage = () => {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [algorithm, setAlgorithm] = useState<'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG'>('TOKEN_BUCKET');
+  const [algorithm, setAlgorithm] = useState<'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG' | 'LEAKY_BUCKET'>('TOKEN_BUCKET');
   const [capacity, setCapacity] = useState('10');
   const [refillRate, setRefillRate] = useState('0.1');
   const [windowDurationMs, setWindowDurationMs] = useState('60000');
@@ -64,11 +64,14 @@ const ClientsPage = () => {
     setSelectedClient(client);
     setName(client.name);
     setDescription(client.description || '');
-    const algo = (client.configuration?.algorithm as 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG') || 'TOKEN_BUCKET';
+    const algo = (client.configuration?.algorithm as 'TOKEN_BUCKET' | 'FIXED_WINDOW' | 'SLIDING_WINDOW' | 'SLIDING_LOG' | 'LEAKY_BUCKET') || 'TOKEN_BUCKET';
     setAlgorithm(algo);
     if (algo === 'TOKEN_BUCKET') {
       setCapacity(client.configuration?.burstSize?.toString() || '10');
       setRefillRate(client.configuration?.refillRate?.toString() || '0.1');
+    } else if (algo === 'LEAKY_BUCKET') {
+      setCapacity(client.configuration?.queueCapacity?.toString() || '10');
+      setRefillRate(client.configuration?.leakRate?.toString() || '1');
     } else {
       setWindowDurationMs(client.configuration?.windowDurationMs?.toString() || '60000');
       setRequestLimit(client.configuration?.requestsPerSecond?.toString() || '10');
@@ -85,11 +88,11 @@ const ClientsPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      if (algorithm === 'TOKEN_BUCKET') {
+      if (algorithm === 'TOKEN_BUCKET' || algorithm === 'LEAKY_BUCKET') {
         await createClient({
           name,
           description,
-          algorithm: 'TOKEN_BUCKET',
+          algorithm,
           capacity: parseInt(capacity),
           refillRate: parseFloat(refillRate),
         });
@@ -118,7 +121,7 @@ const ClientsPage = () => {
     setIsSubmitting(true);
     try {
       const algo = selectedClient.configuration?.algorithm || 'TOKEN_BUCKET';
-      if (algo === 'TOKEN_BUCKET') {
+      if (algo === 'TOKEN_BUCKET' || algo === 'LEAKY_BUCKET') {
         await updateClient(selectedClient.id, {
           name,
           description,
@@ -182,6 +185,23 @@ const ClientsPage = () => {
         </div>
       );
     }
+    
+    if (currentAlgo === 'LEAKY_BUCKET') {
+      return (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Queue Capacity</label>
+            <Input type="number" min="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} required disabled={isSubmitting} />
+            <p className="text-xs text-muted-foreground">Maximum spaces in the bucket queue.</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Leak Rate (Req/sec)</label>
+            <Input type="number" min="0.01" step="0.01" value={refillRate} onChange={(e) => setRefillRate(e.target.value)} required disabled={isSubmitting} />
+            <p className="text-xs text-muted-foreground">Requests leaking out of the queue per second. (e.g., 0.1 = 1 req clears every 10s)</p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="grid grid-cols-2 gap-4">
@@ -223,8 +243,8 @@ const ClientsPage = () => {
             <div className="pr-2">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-lg">{client.name}</h3>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : algo === 'SLIDING_LOG' ? 'bg-teal-500/10 text-teal-500 border-teal-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                  {isTokenBucket ? 'Token Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : algo === 'SLIDING_LOG' ? 'Sliding Log' : 'Fixed Window'}
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'LEAKY_BUCKET' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : algo === 'SLIDING_LOG' ? 'bg-teal-500/10 text-teal-500 border-teal-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                  {isTokenBucket ? 'Token Bucket' : algo === 'LEAKY_BUCKET' ? 'Leaky Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : algo === 'SLIDING_LOG' ? 'Sliding Log' : 'Fixed Window'}
                 </span>
               </div>
               {client.description && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{client.description}</p>}
@@ -263,6 +283,29 @@ const ClientsPage = () => {
                   <Activity className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Refill:</span>
                   <span className="font-medium">{client.configuration?.refillRate}/s</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`h-1.5 w-1.5 rounded-full ml-1.5 mr-1 ${client.isActive ? 'bg-green-500' : 'bg-destructive'}`} />
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className="font-medium">{client.isActive ? 'Active' : 'Disabled'}</span>
+                </div>
+              </div>
+            ) : algo === 'LEAKY_BUCKET' ? (
+              <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Queue Size:</span>
+                  <span className="font-medium">{client.configuration?.queueCapacity}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-orange-500/70 ml-1.5 mr-1" />
+                  <span className="text-muted-foreground">Queued:</span>
+                  <span className="font-medium">{client.leakyBucketState?.queueLength != null ? Math.floor(client.leakyBucketState.queueLength) : 'N/A'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Leak Rate:</span>
+                  <span className="font-medium">{client.configuration?.leakRate}/s</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`h-1.5 w-1.5 rounded-full ml-1.5 mr-1 ${client.isActive ? 'bg-green-500' : 'bg-destructive'}`} />
@@ -413,6 +456,18 @@ const ClientsPage = () => {
                 <p className="text-sm font-semibold">Sliding Log</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Highly accurate timestamp-based windowing</p>
               </button>
+              <button
+                type="button"
+                onClick={() => setAlgorithm('LEAKY_BUCKET')}
+                disabled={isSubmitting}
+                className={`p-3 rounded-lg border-2 text-left transition-all col-span-2 sm:col-span-1 ${algorithm === 'LEAKY_BUCKET'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'
+                  }`}
+              >
+                <p className="text-sm font-semibold">Leaky Bucket</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Strict traffic policing and smooth queuing</p>
+              </button>
             </div>
           </div>
 
@@ -446,7 +501,7 @@ const ClientsPage = () => {
           <div className="space-y-2">
             <label className="text-sm font-medium">Algorithm</label>
             <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-sm text-muted-foreground">
-              {selectedClient?.configuration?.algorithm === 'FIXED_WINDOW' ? 'Fixed Window' : selectedClient?.configuration?.algorithm === 'SLIDING_WINDOW' ? 'Sliding Window' : selectedClient?.configuration?.algorithm === 'SLIDING_LOG' ? 'Sliding Log' : 'Token Bucket'}
+              {selectedClient?.configuration?.algorithm === 'FIXED_WINDOW' ? 'Fixed Window' : selectedClient?.configuration?.algorithm === 'SLIDING_WINDOW' ? 'Sliding Window' : selectedClient?.configuration?.algorithm === 'SLIDING_LOG' ? 'Sliding Log' : selectedClient?.configuration?.algorithm === 'LEAKY_BUCKET' ? 'Leaky Bucket' : 'Token Bucket'}
               <span className="text-xs ml-2 italic">(Cannot be changed after creation)</span>
             </div>
           </div>

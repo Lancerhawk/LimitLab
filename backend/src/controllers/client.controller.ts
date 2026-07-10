@@ -5,13 +5,13 @@ import { z } from 'zod';
 const CreateClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  algorithm: z.enum(['TOKEN_BUCKET', 'FIXED_WINDOW', 'SLIDING_WINDOW', 'SLIDING_LOG']).default('TOKEN_BUCKET'),
+  algorithm: z.enum(['TOKEN_BUCKET', 'FIXED_WINDOW', 'SLIDING_WINDOW', 'SLIDING_LOG', 'LEAKY_BUCKET']).default('TOKEN_BUCKET'),
   capacity: z.number().int().positive('Capacity must be positive').optional(),
   refillRate: z.number().positive('Refill rate must be positive').optional(),
   windowDurationMs: z.number().int().positive('Window duration must be positive').optional(),
   requestLimit: z.number().int().positive('Request limit must be positive').optional(),
 }).refine((data) => {
-  if (data.algorithm === 'TOKEN_BUCKET') {
+  if (data.algorithm === 'TOKEN_BUCKET' || data.algorithm === 'LEAKY_BUCKET') {
     return (data.capacity ?? 10) > 0 && (data.refillRate ?? 1) > 0;
   }
   if (data.algorithm === 'FIXED_WINDOW' || data.algorithm === 'SLIDING_WINDOW' || data.algorithm === 'SLIDING_LOG') {

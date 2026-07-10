@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { getClientById, type Client } from '../api/clients';
-import { evaluateRateLimit, evaluateFixedWindowRateLimit, evaluateSlidingWindowRateLimit, evaluateSlidingLogRateLimit } from '../api/rateLimit';
+import { evaluateRateLimit, evaluateFixedWindowRateLimit, evaluateSlidingWindowRateLimit, evaluateSlidingLogRateLimit, evaluateLeakyBucketRateLimit } from '../api/rateLimit';
 import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -28,13 +28,12 @@ const ClientDetailsPage = () => {
   const [copied, setCopied] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
-  // Playground State
   const [requestCount, setRequestCount] = useState<number | string>(1);
   const [delayMs, setDelayMs] = useState<number | string>(600);
   const [isExecuting, setIsExecuting] = useState(false);
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [sessionStats, setSessionStats] = useState({ total: 0, allowed: 0, denied: 0 });
-  const [animationTick, setAnimationTick] = useState(0);
+  const [, setAnimationTick] = useState(0);
   const [liveTokens, setLiveTokens] = useState<number>(0);
 
 
@@ -59,15 +58,35 @@ const ClientDetailsPage = () => {
   const isFixedWindow = client?.configuration?.algorithm === 'FIXED_WINDOW';
   const isSlidingWindow = client?.configuration?.algorithm === 'SLIDING_WINDOW';
   const isSlidingLog = client?.configuration?.algorithm === 'SLIDING_LOG';
+  const isLeakyBucket = client?.configuration?.algorithm === 'LEAKY_BUCKET';
 
   useEffect(() => {
     if (!client?.configuration) return;
 
     if (isSlidingLog) {
-      // Force continuous re-renders for Sliding Log to power the smooth timeline animation
-      // and recalculate expiring tokens dynamically on the fly.
       const interval = setInterval(() => {
         setAnimationTick(prev => prev + 1);
+      }, 50);
+      return () => clearInterval(interval);
+    }
+
+    if (isLeakyBucket) {
+      if (!client?.leakyBucketState) return;
+      const calculateLeakyBucketQueue = () => {
+        const leakRate = client.configuration!.leakRate ?? 1;
+        const queueLength = client.leakyBucketState!.queueLength;
+        const lastLeakTime = new Date(client.leakyBucketState!.lastLeakTime);
+
+        const elapsedMs = Math.max(0, Date.now() - lastLeakTime.getTime());
+        const elapsedSeconds = elapsedMs / 1000;
+        
+        return Math.max(0, queueLength - (elapsedSeconds * leakRate));
+      };
+      
+      // Update queue length in liveTokens just so we have a number to show
+      setLiveTokens(calculateLeakyBucketQueue());
+      const interval = setInterval(() => {
+        setLiveTokens(calculateLeakyBucketQueue());
       }, 50);
       return () => clearInterval(interval);
     }
@@ -165,7 +184,7 @@ const ClientDetailsPage = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const downloadScript = (language: 'node' | 'python' | 'bash', variant: 'basic' | 'advanced') => {
+  const downloadScript = (language: 'node' | 'python' | 'bash', variant: 'ip' | 'client' | 'advanced') => {
     if (!client) return;
 
     const endpoint = isFixedWindow
@@ -174,17 +193,19 @@ const ClientDetailsPage = () => {
         ? 'http://localhost:3001/api/v1/rate-limit/sliding-window/memory'
         : isSlidingLog
           ? 'http://localhost:3001/api/v1/rate-limit/sliding-log/memory'
-          : 'http://localhost:3001/api/v1/rate-limit/memory';
-    const waitS = isFixedWindow || isSlidingWindow || isSlidingLog ? 61 : 12;
-    const waitMsg = isFixedWindow || isSlidingWindow || isSlidingLog ? 'for window to reset' : 'for refill';
+          : isLeakyBucket
+            ? 'http://localhost:3001/api/v1/rate-limit/leaky-bucket/memory'
+            : 'http://localhost:3001/api/v1/rate-limit/memory';
+    const waitS = isFixedWindow || isSlidingWindow || isSlidingLog ? 61 : isLeakyBucket ? 15 : 12;
+    const waitMsg = isFixedWindow || isSlidingWindow || isSlidingLog ? 'for window to reset' : isLeakyBucket ? 'for queue to drain' : 'for refill';
 
     let content = '';
     let filename = '';
-    const fileSuffix = variant === 'advanced' ? '_advanced' : '_basic';
+    const fileSuffix = variant === 'advanced' ? '_advanced' : variant === 'client' ? '_targeted' : '_basic_ip';
 
     if (language === 'node') {
       filename = `load_test${fileSuffix}.js`;
-      const headerCode = variant === 'advanced' ? `, {\n      headers: { 'x-client-id': 'simulated-user-' + requestNumber },\n      validateStatus: () => true\n    }` : `, {\n      validateStatus: () => true\n    }`;
+      const headerCode = variant === 'advanced' ? `, {\n      headers: { 'x-client-id': 'simulated-user-' + requestNumber },\n      validateStatus: () => true\n    }` : variant === 'client' ? `, {\n      headers: { 'x-client-id': '${client.id}' },\n      validateStatus: () => true\n    }` : `, {\n      validateStatus: () => true\n    }`;
       content = `const axios = require('axios');
 
 const ENDPOINT = '${endpoint}';
@@ -243,7 +264,7 @@ run();
 `;
     } else if (language === 'python') {
       filename = `load_test${fileSuffix}.py`;
-      const headerCode = variant === 'advanced' ? `headers={'x-client-id': f'simulated-user-{i}'}` : ``;
+      const headerCode = variant === 'advanced' ? `headers={'x-client-id': f'simulated-user-{i}'}` : variant === 'client' ? `headers={'x-client-id': '${client.id}'}` : ``;
       content = `import requests
 import concurrent.futures
 import time
@@ -293,7 +314,7 @@ print_results("TEST 4: 15 Sequential (100ms delay)", run_sequential(15, 100))
 `;
     } else if (language === 'bash') {
       filename = `load_test${fileSuffix}.sh`;
-      const headerCode = variant === 'advanced' ? ` -H "x-client-id: simulated-user-$i"` : ``;
+      const headerCode = variant === 'advanced' ? ` -H "x-client-id: simulated-user-$i"` : variant === 'client' ? ` -H "x-client-id: ${client.id}"` : ``;
       content = `#!/bin/bash
 ENDPOINT="${endpoint}"
 
@@ -369,7 +390,9 @@ run_sequential 15
               ? evaluateSlidingWindowRateLimit
               : isSlidingLog
                 ? evaluateSlidingLogRateLimit
-                : evaluateRateLimit;
+                : isLeakyBucket
+                  ? evaluateLeakyBucketRateLimit
+                  : evaluateRateLimit;
           const response = await evaluator(client.apiKey, safeCount, safeDelay);
 
           const logEntry: RequestLog = {
@@ -454,6 +477,23 @@ run_sequential 15
               return prev;
             }
 
+            if (isLeakyBucket) {
+              const capacity = prev.configuration?.queueCapacity ?? 10;
+              const leakRate = prev.configuration?.leakRate ?? 1;
+              const queueLength = response.queueLength ?? 0;
+              
+              return {
+                ...prev,
+                leakyBucketState: {
+                  ...prev.leakyBucketState,
+                  capacity,
+                  leakRate,
+                  queueLength,
+                  lastLeakTime: new Date().toISOString()
+                }
+              };
+            }
+
             return {
               ...prev,
               bucketState: {
@@ -509,9 +549,11 @@ run_sequential 15
     );
   }
 
-  const capacity = (isFixedWindow || isSlidingWindow || isSlidingLog)
-    ? (client.configuration?.requestsPerSecond || 10)
-    : (client.configuration?.burstSize || 10);
+  const capacity = isLeakyBucket
+    ? (client.configuration?.queueCapacity || 10)
+    : (isFixedWindow || isSlidingWindow || isSlidingLog)
+      ? (client.configuration?.requestsPerSecond || 10)
+      : (client.configuration?.burstSize || 10);
   let currentTokens = Math.floor(liveTokens);
 
   if (isSlidingLog) {
@@ -519,8 +561,11 @@ run_sequential 15
     const limit = client.configuration?.requestsPerSecond ?? 10;
     const activeLogs = logs.filter(l => l.decision === 'ALLOW' && Date.now() - l.timestamp.getTime() < windowMs);
     currentTokens = Math.max(0, limit - activeLogs.length);
+  } else if (isLeakyBucket) {
+    // For leaky bucket, we want to show remaining slots instead of queue length for consistency
+    currentTokens = Math.max(0, capacity - Math.floor(liveTokens));
   }
-  const percentFull = Math.max(0, Math.min(100, (liveTokens / capacity) * 100));
+  const percentFull = Math.max(0, Math.min(100, (currentTokens / capacity) * 100));
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
@@ -569,6 +614,17 @@ run_sequential 15
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground flex items-center gap-2"><Cpu className="h-4 w-4" /> Request Limit</p>
                       <p className="font-semibold">{client.configuration?.requestsPerSecond} requests</p>
+                    </div>
+                  </>
+                ) : isLeakyBucket ? (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2"><Cpu className="h-4 w-4" /> Queue Capacity</p>
+                      <p className="font-semibold">{capacity} requests</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2"><Activity className="h-4 w-4" /> Leak Rate</p>
+                      <p className="font-semibold">{client.configuration?.leakRate} / sec</p>
                     </div>
                   </>
                 ) : (
@@ -627,7 +683,7 @@ run_sequential 15
                 This playground sends <strong>real HTTP requests</strong> to the backend. Each request travels through your browser, operating system, network stack, Node.js event loop, and database, all of which process work asynchronously. As a result, requests are never guaranteed to arrive at the backend at the exact same instant, regardless of the configured delay.
               </p>
               <p>
-                To produce consistent, understandable results while manually testing the {isFixedWindow ? 'Fixed Window' : 'Token Bucket'} algorithm, extremely small delays are intentionally restricted. This is <strong>not</strong> a limitation of the rate limiter itself. The implementation is fully correct. It is simply the nature of testing real HTTP requests over a real network stack.
+                To produce consistent, understandable results while manually testing the {isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : isSlidingLog ? 'Sliding Log' : isLeakyBucket ? 'Leaky Bucket' : 'Token Bucket'} algorithm, extremely small delays are intentionally restricted. This is <strong>not</strong> a limitation of the rate limiter itself. The implementation is fully correct. It is simply the nature of testing real HTTP requests over a real network stack.
               </p>
               <p className="text-blue-500/80 italic">
                 A dedicated Traffic Simulator will be introduced in a future phase to demonstrate mathematically perfect traffic bursts, ideal algorithm behavior, and side-by-side algorithm comparisons without browser, network, or database timing effects.
@@ -648,7 +704,7 @@ run_sequential 15
                       POST
                     </span>
                     <code className="flex-1 px-3 py-2 rounded-none rounded-r-md border border-border bg-background text-sm text-muted-foreground">
-                      {isFixedWindow ? '/api/v1/rate-limit/fixed-window' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window' : isSlidingLog ? '/api/v1/rate-limit/sliding-log' : '/api/v1/rate-limit'}
+                      {isFixedWindow ? '/api/v1/rate-limit/fixed-window' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window' : isSlidingLog ? '/api/v1/rate-limit/sliding-log' : isLeakyBucket ? '/api/v1/rate-limit/leaky-bucket' : '/api/v1/rate-limit'}
                     </code>
                   </div>
                 </div>
@@ -732,7 +788,7 @@ run_sequential 15
               <div className="space-y-3">
                 <div className="flex justify-between items-end">
                   <h3 className="text-sm font-medium text-muted-foreground">
-                    {isFixedWindow ? 'Fixed Window Capacity' : isSlidingWindow ? 'Sliding Window Allowance' : isSlidingLog ? 'Sliding Log Capacity' : 'Live Bucket State'}
+                    {isFixedWindow ? 'Fixed Window Capacity' : isSlidingWindow ? 'Sliding Window Allowance' : isSlidingLog ? 'Sliding Log Capacity' : isLeakyBucket ? 'Leaky Bucket Queue Space' : 'Live Bucket State'}
                   </h3>
                   <div className="text-xl font-bold font-mono">
                     {currentTokens} <span className="text-sm text-muted-foreground font-normal">/ {capacity}</span>
@@ -792,6 +848,19 @@ run_sequential 15
                       style={{ width: `${percentFull}%` }}
                     />
                   </div>
+                ) : isLeakyBucket ? (
+                  <div className="flex w-full h-12 bg-[#0a0a0a] rounded-lg border border-border overflow-hidden relative shadow-inner p-1 gap-1 items-end justify-start rotate-180">
+                    <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, var(--border) 1px, transparent 1px)', backgroundSize: '100% 8px' }} />
+                    <div className="absolute top-0 right-0 p-1 text-[8px] text-muted-foreground font-mono rotate-180 z-20">OUT (LEAK)</div>
+                    <div className="absolute bottom-0 right-0 p-1 text-[8px] text-muted-foreground font-mono rotate-180 z-20">IN</div>
+                    
+                    {Array.from({ length: Math.min(capacity, 50) }).map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={`flex-1 rounded-sm transition-all duration-300 ${i < Math.floor(liveTokens) ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)] h-[90%]' : 'bg-muted/30 border border-border/50 h-[30%]'}`} 
+                      />
+                    ))}
+                  </div>
                 ) : (
                   <div className="h-8 w-full bg-muted/50 rounded-lg border border-border overflow-hidden relative shadow-inner">
                     <div
@@ -802,8 +871,13 @@ run_sequential 15
                 )}
 
                 <p className="text-xs text-muted-foreground text-right">
-                  {isFixedWindow ? 'Visualization represents remaining requests before the rigid window resets.' : isSlidingWindow ? 'Visualization represents remaining requests based on overlapping window estimation.' : isSlidingLog ? 'Visualization represents exact available spots in the sliding time window.' : 'Visualization represents currently available tokens in the bucket.'}
+                  {isFixedWindow ? 'Visualization represents remaining requests before the rigid window resets.' : isSlidingWindow ? 'Visualization represents remaining requests based on overlapping window estimation.' : isSlidingLog ? 'Visualization represents exact available spots in the sliding time window.' : isLeakyBucket ? 'Visualization represents requests in the queue waiting to leak out at a constant rate.' : 'Visualization represents currently available tokens in the bucket.'}
                 </p>
+                {isSlidingLog && (
+                  <p className="text-[10px] text-amber-500/70 text-right mt-1 font-medium">
+                    Note: This visualizer uses local browser history to animate at 60fps. Reloading the page clears the animation, but the backend database limit remains fully active!
+                  </p>
+                )}
               </div>
 
               {/* Session Stats */}
@@ -891,7 +965,7 @@ run_sequential 15
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Endpoint:</span>
                   <code className="text-primary font-semibold">
-                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window/memory' : isSlidingLog ? '/api/v1/rate-limit/sliding-log/memory' : '/api/v1/rate-limit/memory'}
+                    {isFixedWindow ? '/api/v1/rate-limit/fixed-window/memory' : isSlidingWindow ? '/api/v1/rate-limit/sliding-window/memory' : isSlidingLog ? '/api/v1/rate-limit/sliding-log/memory' : isLeakyBucket ? '/api/v1/rate-limit/leaky-bucket/memory' : '/api/v1/rate-limit/memory'}
                   </code>
                 </div>
                 {isFixedWindow || isSlidingWindow || isSlidingLog ? (
@@ -942,7 +1016,7 @@ run_sequential 15
       <Modal
         isOpen={isDownloadModalOpen}
         onClose={() => setIsDownloadModalOpen(false)}
-        title={`Download ${isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : isSlidingLog ? 'Sliding Log' : 'Token Bucket'} Scripts`}
+        title={`Download ${isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : isSlidingLog ? 'Sliding Log' : isLeakyBucket ? 'Leaky Bucket' : 'Token Bucket'} Scripts`}
         description="Choose the type of load testing script you want to download."
         className="max-w-2xl"
       >
@@ -953,17 +1027,30 @@ run_sequential 15
               Basic Sandbox Script (IP-Based)
             </h4>
             <p className="text-sm text-muted-foreground">
-              A perfectly isolated script that hits the in-memory endpoint using your IP address.
-              {isSlidingLog && " Watch how each request is individually timestamped and the log precisely tracks your window."}
-              {isSlidingWindow && " Watch how your capacity smoothly regenerates over the window overlap."}
-              {isFixedWindow && " Watch how requests are hard-blocked until the exact moment the window resets."}
-              {!isFixedWindow && !isSlidingWindow && !isSlidingLog && " Watch how your tokens are steadily refilled second by second."}
-              Ideal for running simple local tests.
+              A perfectly isolated script that hits the in-memory endpoint using your IP address. No client headers are sent.
+              {isLeakyBucket && " Watch how requests queue up and smoothly leak out."}
+              Ideal for running simple local tests without affecting this specific client's bucket.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => downloadScript('node', 'basic')}>Node.js</Button>
-              <Button variant="outline" className="flex-1" onClick={() => downloadScript('python', 'basic')}>Python</Button>
-              <Button variant="outline" className="flex-1" onClick={() => downloadScript('bash', 'basic')}>Bash</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('node', 'ip')}>Node.js</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('python', 'ip')}>Python</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('bash', 'ip')}>Bash</Button>
+            </div>
+          </div>
+
+          <div className="space-y-3 p-4 border border-border/50 rounded-lg bg-card">
+            <h4 className="font-semibold text-foreground flex items-center gap-2">
+              <Terminal className="h-4 w-4 text-primary" />
+              Targeted Sandbox Script (Client ID)
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              This script injects <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id: {client.id}</code> into every request.
+              Use this to test the specific limits and configuration applied to THIS client.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('node', 'client')}>Node.js</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('python', 'client')}>Python</Button>
+              <Button variant="outline" className="flex-1" onClick={() => downloadScript('bash', 'client')}>Bash</Button>
             </div>
           </div>
 
@@ -974,7 +1061,7 @@ run_sequential 15
             </h4>
             <p className="text-sm text-muted-foreground">
               A high-performance script that injects unique <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id</code> headers
-              to simulate hundreds of <strong>completely distinct users</strong> hammering the {isSlidingLog ? 'Sliding Log' : isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : 'Token Bucket'}
+              to simulate hundreds of <strong>completely distinct users</strong> hammering the {isSlidingLog ? 'Sliding Log' : isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : isLeakyBucket ? 'Leaky Bucket' : 'Token Bucket'}
               algorithm at the exact same time. Essential for testing concurrent system isolation.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">

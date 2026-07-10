@@ -14,6 +14,8 @@ export interface Client {
     burstSize: number;
     refillRate: number;
     windowDurationMs?: number;
+    queueCapacity?: number;
+    leakRate?: number;
     isEnabled: boolean;
   };
   bucketState?: {
@@ -32,6 +34,12 @@ export interface Client {
     previousWindow: string;
     previousCount: number;
     resetTime: string;
+  };
+  leakyBucketState?: {
+    queueLength: number;
+    lastLeakTime: string;
+    capacity: number;
+    leakRate: number;
   };
   statistics?: {
     totalRequests: string;

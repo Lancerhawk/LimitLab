@@ -12,6 +12,8 @@ import { simulateTokenBucket, refillTokenBucket } from './algorithms/tokenBucket
 import { simulateFixedWindow, getWindowInfo } from './algorithms/fixedWindowSimulator';
 import { simulateSlidingWindow, getSlidingWindowInfo } from './algorithms/slidingWindowSimulator';
 import { simulateSlidingLog, getSlidingLogInfo } from './algorithms/slidingLogSimulator';
+import { processLeakyBucketRequest, advanceLeakyBucketTime, getInitialLeakyBucketState } from './algorithms/leakyBucketSimulator';
+import type { LeakyBucketState } from './types';
 
 const HISTORY_INTERVAL_MS = 100;
 
@@ -28,6 +30,7 @@ export interface SimulationSnapshot {
   historyVersion: number;
   trafficVersion: number;
   slidingLogTimestamps?: number[];
+  queueLength?: number;
 }
 
 export type TickCallback = (snapshot: SimulationSnapshot) => void;
@@ -48,6 +51,7 @@ export class SimulationEngine {
   private fwState: FixedWindowState = { requestCount: 0, windowStartMs: 0 };
   private swState: SlidingWindowState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
   private slState: SlidingLogState = { timestamps: [] };
+  private lbState: LeakyBucketState = { queueLength: 0, lastLeakTimeMs: 0 };
 
   private totalAccepted = 0;
   private totalRejected = 0;
@@ -68,6 +72,7 @@ export class SimulationEngine {
     this.fwState = { requestCount: 0, windowStartMs: 0 };
     this.swState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
     this.slState = { timestamps: [] };
+    this.lbState = getInitialLeakyBucketState(config);
   }
 
   onTick(callback: TickCallback): () => void {
@@ -94,6 +99,9 @@ export class SimulationEngine {
     } else if (this.config.algorithm === 'SLIDING_LOG') {
       const info = getSlidingLogInfo(this.slState, this.config, this.simulationTimeMs);
       tokens = info.remaining;
+    } else if (this.config.algorithm === 'LEAKY_BUCKET') {
+      const advanced = advanceLeakyBucketTime(this.lbState, this.config, this.simulationTimeMs);
+      tokens = Math.max(0, this.config.capacity - advanced.queueLength);
     } else {
       tokens = Math.max(0, this.config.requestLimit - this.fwState.requestCount);
     }
@@ -111,6 +119,7 @@ export class SimulationEngine {
       historyVersion: this._historyVersion,
       trafficVersion: this._trafficVersion,
       slidingLogTimestamps: [...this.slState.timestamps],
+      queueLength: this.lbState.queueLength,
     };
   }
 
@@ -123,7 +132,9 @@ export class SimulationEngine {
           ? Math.max(0, this.config.requestLimit - (this.swState.currentWindowCount + this.swState.previousWindowCount * Math.max(0, 1 - ((this.simulationTimeMs - (Math.floor(this.simulationTimeMs / this.config.windowDurationMs) * this.config.windowDurationMs)) / this.config.windowDurationMs))))
           : this.config.algorithm === 'SLIDING_LOG'
             ? getSlidingLogInfo(this.slState, this.config, this.simulationTimeMs).remaining
-            : Math.max(0, this.config.requestLimit - this.fwState.requestCount),
+            : this.config.algorithm === 'LEAKY_BUCKET'
+              ? Math.max(0, this.config.capacity - advanceLeakyBucketTime(this.lbState, this.config, this.simulationTimeMs).queueLength)
+              : Math.max(0, this.config.requestLimit - this.fwState.requestCount),
       requestCount: this.fwState.requestCount,
       windowStartMs: this.fwState.windowStartMs,
       totalAccepted: this.totalAccepted,
@@ -133,6 +144,7 @@ export class SimulationEngine {
       isPaused: this.isPaused,
       isComplete: this.isComplete,
       slidingLogTimestamps: [...this.slState.timestamps],
+      queueLength: this.lbState.queueLength,
     };
   }
 
@@ -243,6 +255,7 @@ export class SimulationEngine {
     this.fwState = { requestCount: 0, windowStartMs: 0 };
     this.swState = { currentWindowCount: 0, currentWindowStartMs: 0, previousWindowCount: 0, previousWindowStartMs: 0 };
     this.slState = { timestamps: [] };
+    this.lbState = getInitialLeakyBucketState(this.config);
 
     this.totalAccepted = 0;
     this.totalRejected = 0;
@@ -343,6 +356,11 @@ export class SimulationEngine {
         event.decision = result.decision;
         const info = getSlidingLogInfo(result.newState, this.config, event.timeMs);
         event.tokensAtTime = info.remaining;
+      } else if (this.config.algorithm === 'LEAKY_BUCKET') {
+        const result = processLeakyBucketRequest(this.lbState, this.config, event);
+        this.lbState = result.newState;
+        event.decision = result.decision;
+        event.tokensAtTime = Math.max(0, this.config.capacity - result.queueLength);
       } else {
         const result = simulateFixedWindow(this.fwState, this.config, event.timeMs);
         this.fwState = result.newState;
@@ -366,6 +384,10 @@ export class SimulationEngine {
 
     if (this.config.algorithm === 'TOKEN_BUCKET') {
       this.tbState = refillTokenBucket(this.tbState, this.config, targetTimeMs);
+    }
+
+    if (this.config.algorithm === 'LEAKY_BUCKET') {
+      this.lbState = advanceLeakyBucketTime(this.lbState, this.config, targetTimeMs);
     }
 
     if (this.config.algorithm === 'FIXED_WINDOW') {
@@ -421,6 +443,9 @@ export class SimulationEngine {
     } else if (this.config.algorithm === 'SLIDING_LOG') {
       const info = getSlidingLogInfo(this.slState, this.config, this.lastHistoryTimeMs);
       tokens = info.remaining;
+    } else if (this.config.algorithm === 'LEAKY_BUCKET') {
+      const advanced = advanceLeakyBucketTime(this.lbState, this.config, this.lastHistoryTimeMs);
+      tokens = Math.max(0, this.config.capacity - advanced.queueLength);
     } else {
       tokens = Math.max(0, this.config.requestLimit - this.fwState.requestCount);
     }

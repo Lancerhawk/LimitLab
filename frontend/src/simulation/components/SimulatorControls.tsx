@@ -81,6 +81,7 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = React.memo(({
                   <option value="FIXED_WINDOW" className="bg-card text-foreground">Fixed Window</option>
                   <option value="SLIDING_WINDOW" className="bg-card text-foreground">Sliding Window Counter</option>
                   <option value="SLIDING_LOG" className="bg-card text-foreground">Sliding Log</option>
+                  <option value="LEAKY_BUCKET" className="bg-card text-foreground">Leaky Bucket</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -129,10 +130,12 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = React.memo(({
       {!isComparisonMode && (
         <Card className="col-span-full lg:col-span-1">
           <CardContent className="p-4 space-y-4">
-            {config.algorithm === 'TOKEN_BUCKET' ? (
+            {config.algorithm === 'TOKEN_BUCKET' || config.algorithm === 'LEAKY_BUCKET' ? (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Bucket Capacity</label>
+                  <label className="text-sm font-medium text-foreground">
+                    {config.algorithm === 'LEAKY_BUCKET' ? 'Queue Capacity' : 'Bucket Capacity'}
+                  </label>
                   <Input
                     type="number"
                     min="1"
@@ -142,7 +145,9 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = React.memo(({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Refill Rate (tokens/sec)</label>
+                  <label className="text-sm font-medium text-foreground">
+                    {config.algorithm === 'LEAKY_BUCKET' ? 'Leak Rate (req/sec)' : 'Refill Rate (tokens/sec)'}
+                  </label>
                   <Input
                     type="number"
                     min="0.1"

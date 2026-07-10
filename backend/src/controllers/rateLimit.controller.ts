@@ -7,6 +7,8 @@ import { SlidingWindowRateLimiterService } from '../services/slidingWindowRateLi
 import { InMemorySlidingWindowRateLimiterService } from '../services/inMemorySlidingWindowRateLimiter.service';
 import { SlidingLogRateLimiterService } from '../services/slidingLogRateLimiter.service';
 import { InMemorySlidingLogRateLimiterService } from '../services/inMemorySlidingLogRateLimiter.service';
+import { LeakyBucketRateLimiterService } from '../services/leakyBucketRateLimiter.service';
+import { InMemoryLeakyBucketRateLimiterService } from '../services/inMemoryLeakyBucketRateLimiter.service';
 
 export class RateLimitController {
   static async process(req: Request, res: Response) {
@@ -59,16 +61,16 @@ export class RateLimitController {
       if (!clientId) {
         clientId = req.ip || 'unknown-client';
       }
-      
+
       const result = InMemoryRateLimiterService.processRequest(clientId);
-      
+
       res.setHeader('X-RateLimit-Limit', result.capacity.toString());
       res.setHeader('X-RateLimit-Remaining', Math.floor(result.remainingTokens).toString());
-      
+
       if (result.resetTimestamp !== undefined) {
         res.setHeader('X-RateLimit-Reset', result.resetTimestamp.toString());
       }
-    
+
       if (result.decision === 'DENY') {
         if (result.retryAfterSeconds !== undefined) {
           res.setHeader('Retry-After', result.retryAfterSeconds.toString());
@@ -308,6 +310,58 @@ export class RateLimitController {
       }
     } catch (error: any) {
       res.status(500).json({ error: 'In-memory Sliding Log rate limiter error', details: error.message });
+    }
+  }
+  static async processLeakyBucket(req: Request, res: Response) {
+    try {
+      const apiKey = req.headers['x-api-key'] || req.body.apiKey;
+
+      if (!apiKey || typeof apiKey !== 'string') {
+        return res.status(401).json({ error: 'API Key is missing or invalid' });
+      }
+
+      const result = await LeakyBucketRateLimiterService.processRequest(apiKey);
+
+      res.set({
+        'X-RateLimit-Limit': result.capacity.toString(),
+        'X-RateLimit-Remaining': result.queueLength.toString(),
+      });
+
+      if (result.decision === 'ALLOW') {
+        res.status(200).json(result);
+      } else {
+        res.status(429).json({ error: 'Too Many Requests', ...result });
+      }
+    } catch (error: any) {
+      if (error.message === 'UNAUTHORIZED') {
+        return res.status(401).json({ error: 'Invalid API Key' });
+      }
+      if (error.message === 'RATE_LIMITER_UNAVAILABLE') {
+        return res.status(503).json({ error: 'Rate limiter temporarily unavailable. Please try again.' });
+      }
+      res.status(500).json({ error: 'Leaky Bucket rate limiter error', details: error.message });
+    }
+  }
+
+  static processLeakyBucketMemory(req: Request, res: Response) {
+    try {
+      let clientId = req.headers['x-client-id'] as string;
+      if (!clientId) {
+        clientId = req.ip || 'unknown-client';
+      }
+
+      const result = InMemoryLeakyBucketRateLimiterService.processRequest(clientId);
+
+      res.setHeader('X-RateLimit-Limit', result.capacity.toString());
+      res.setHeader('X-RateLimit-Remaining', result.queueLength.toString());
+
+      if (result.decision === 'DENY') {
+        res.status(429).json(result);
+      } else {
+        res.status(200).json(result);
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: 'In-memory Leaky Bucket rate limiter error', details: error.message });
     }
   }
 }

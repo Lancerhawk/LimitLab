@@ -5,6 +5,7 @@ import { SimulatorControls } from '../simulation/components/SimulatorControls';
 import { SimulatorTimeline } from '../simulation/components/SimulatorTimeline';
 import { BucketVisualizer } from '../simulation/components/BucketVisualizer';
 import { SlidingWindowVisualizer } from '../simulation/components/SlidingWindowVisualizer';
+import { LeakyBucketVisualizer } from '../simulation/components/LeakyBucketVisualizer';
 import { SimulatorCharts } from '../simulation/components/SimulatorCharts';
 import { SimulatorStats } from '../simulation/components/SimulatorStats';
 import { BarChart3 } from 'lucide-react';
@@ -15,6 +16,7 @@ const ALGO_LABELS: Record<AlgorithmType, string> = {
   FIXED_WINDOW: 'Fixed Window',
   SLIDING_WINDOW: 'Sliding Window',
   SLIDING_LOG: 'Sliding Log',
+  LEAKY_BUCKET: 'Leaky Bucket',
 };
 
 const ALGO_COLORS: Record<AlgorithmType, string> = {
@@ -22,6 +24,7 @@ const ALGO_COLORS: Record<AlgorithmType, string> = {
   FIXED_WINDOW: 'border-amber-500/40',
   SLIDING_WINDOW: 'border-purple-500/40',
   SLIDING_LOG: 'border-teal-500/40',
+  LEAKY_BUCKET: 'border-orange-500/40',
 };
 
 const AlgorithmConfiguration = ({ config, updateConfig, disabled }: { config: any, updateConfig: any, disabled: boolean }) => {
@@ -34,6 +37,20 @@ const AlgorithmConfiguration = ({ config, updateConfig, disabled }: { config: an
         </div>
         <div className="flex-1 space-y-1.5">
           <label className="text-xs font-medium text-foreground">Refill /sec</label>
+          <input type="number" min="0.1" step="0.1" value={config.refillRate} onChange={(e) => updateConfig({ refillRate: Number(e.target.value) })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
+        </div>
+      </div>
+    );
+  }
+  if (config.algorithm === 'LEAKY_BUCKET') {
+    return (
+      <div className="flex flex-col sm:flex-row gap-4 mt-4">
+        <div className="flex-1 space-y-1.5">
+          <label className="text-xs font-medium text-foreground">Queue Capacity</label>
+          <input type="number" min="1" value={config.capacity} onChange={(e) => updateConfig({ capacity: Number(e.target.value) })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
+        </div>
+        <div className="flex-1 space-y-1.5">
+          <label className="text-xs font-medium text-foreground">Leak Rate /sec</label>
           <input type="number" min="0.1" step="0.1" value={config.refillRate} onChange={(e) => updateConfig({ refillRate: Number(e.target.value) })} disabled={disabled} className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50" />
         </div>
       </div>
@@ -56,6 +73,9 @@ const AlgorithmConfiguration = ({ config, updateConfig, disabled }: { config: an
 const AlgoVisualizer = ({ config, state }: { config: any; state: any }) => {
   if (config.algorithm === 'SLIDING_WINDOW' || config.algorithm === 'SLIDING_LOG') {
     return <SlidingWindowVisualizer config={config} state={state} />;
+  }
+  if (config.algorithm === 'LEAKY_BUCKET') {
+    return <LeakyBucketVisualizer config={config} state={state} />;
   }
   return <BucketVisualizer config={config} state={state} />;
 };
@@ -81,6 +101,16 @@ export const SimulatorPage = () => {
       sim2.updateConfig({ algorithm: algo2 });
     }
   }, [comparisonMode, algo2]);
+
+  // When entering comparison mode, reset both sims and sync playback speed to 1x
+  useEffect(() => {
+    if (comparisonMode) {
+      sim1.setPlaybackSpeed(1);
+      sim2.setPlaybackSpeed(1);
+      sim1.reset();
+      sim2.reset();
+    }
+  }, [comparisonMode]);
 
   // Sync traffic from sim1 to sim2 whenever comparison is activated or sim1 traffic changes
   // Do not sync if sim1 just finished (isComplete = true), because setTraffic resets the engine state!

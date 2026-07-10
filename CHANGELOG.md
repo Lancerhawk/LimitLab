@@ -2,6 +2,14 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [0.9.0] - 2026-07-10
+### Added
+- **Phase 9: Leaky Bucket Rate Limiter**: Implemented a production-grade Leaky Bucket algorithm.
+- Added PostgreSQL-backed Leaky Bucket implementation using Optimistic Concurrency Control (OCC).
+- Built high-performance in-memory Leaky Bucket implementation.
+- Integrated Leaky Bucket into the interactive Simulation Engine with a custom UI visualizer.
+- Extended the Client Configuration UI and Playground APIs for the new algorithm.
+
 ## [0.8.0] - 2026-07-10
 ### Added
 - Implemented production-grade Sliding Log rate limiting algorithm

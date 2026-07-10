@@ -10,6 +10,9 @@ export interface RateLimitResponse {
   retryAfter?: number;
   retryAfterSeconds?: number;
   resetTimestamp?: number;
+  queueLength?: number;
+  remainingCapacity?: number;
+  leakRate?: number;
 }
 
 export const evaluateRateLimit = async (
@@ -92,3 +95,22 @@ export const evaluateSlidingLogRateLimit = async (
   return response.data;
 };
 
+export const evaluateLeakyBucketRateLimit = async (
+  apiKey: string,
+  requestCount?: number,
+  delayMs?: number
+): Promise<RateLimitResponse> => {
+  const response = await api.post(
+    '/rate-limit/leaky-bucket',
+    { apiKey, requestCount, delayMs },
+    {
+      validateStatus: (status) => status === 200 || status === 429 || status === 400
+    }
+  );
+
+  if (response.status === 400) {
+    throw new Error(response.data.error || 'Validation error');
+  }
+
+  return response.data;
+};

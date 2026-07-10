@@ -13,6 +13,7 @@ enum RateLimitAlgorithm {
   FIXED_WINDOW
   SLIDING_WINDOW
   SLIDING_LOG
+  LEAKY_BUCKET
 }
 
 enum RequestDecision {
@@ -34,6 +35,7 @@ model Client {
   bucketState   BucketState?
   windowState   WindowState?
   slidingWindowState SlidingWindowState?
+  leakyBucketState LeakyBucketState?
   statistics    ClientStatistics?
   requestLogs   RequestLog[]
   slidingLogRequests SlidingLogRequest[]
@@ -55,6 +57,10 @@ model RateLimitConfiguration {
   
   // Specific to Fixed/Sliding Window (in milliseconds)
   windowDurationMs   Int?
+
+  // Specific to Leaky Bucket
+  queueCapacity      Int?
+  leakRate           Float?
 
   isEnabled          Boolean            @default(true)
   createdAt          DateTime           @default(now())
@@ -155,4 +161,17 @@ model SlidingLogRequest {
   // Composite index for fast expiration cleanup and counting
   @@index([clientId, requestTimestamp])
   @@map("sliding_log_requests")
+}
+
+model LeakyBucketState {
+  id              String   @id @default(uuid())
+  clientId        String   @unique
+  queueLength     Float    @default(0)
+  lastLeakTime    DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("leaky_bucket_states")
 }

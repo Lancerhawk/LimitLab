@@ -16,6 +16,7 @@ interface FastState {
   isPaused: boolean;
   isComplete: boolean;
   slidingLogTimestamps?: number[];
+  queueLength?: number;
 }
 
 
@@ -53,6 +54,7 @@ export function useSimulation(initialConfig: SimulationConfig = DEFAULT_CONFIG) 
     isPaused: false,
     isComplete: false,
     slidingLogTimestamps: [],
+    queueLength: 0,
   });
 
   const [slow, setSlow] = useState<SlowState>({
@@ -114,6 +116,7 @@ export function useSimulation(initialConfig: SimulationConfig = DEFAULT_CONFIG) 
       isPaused: snapshot.isPaused,
       isComplete: snapshot.isComplete,
       slidingLogTimestamps: snapshot.slidingLogTimestamps,
+      queueLength: snapshot.queueLength,
     });
 
     const historyChanged = snapshot.historyVersion !== lastHistoryVersionRef.current;
@@ -219,6 +222,7 @@ export function useSimulation(initialConfig: SimulationConfig = DEFAULT_CONFIG) 
     isPaused: fast.isPaused,
     isComplete: fast.isComplete,
     slidingLogTimestamps: fast.slidingLogTimestamps,
+    queueLength: fast.queueLength,
   }), [fast, slow.history]);
 
   return {

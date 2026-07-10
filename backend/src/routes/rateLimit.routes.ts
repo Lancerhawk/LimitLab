@@ -27,4 +27,10 @@ router.get('/sliding-log', RateLimitController.processSlidingLog);
 router.post('/sliding-log/memory', RateLimitController.processSlidingLogMemory);
 router.get('/sliding-log/memory', RateLimitController.processSlidingLogMemory);
 
+router.post('/leaky-bucket', RateLimitController.processLeakyBucket);
+router.get('/leaky-bucket', RateLimitController.processLeakyBucket);
+
+router.post('/leaky-bucket/memory', RateLimitController.processLeakyBucketMemory);
+router.get('/leaky-bucket/memory', RateLimitController.processLeakyBucketMemory);
+
 export default router;

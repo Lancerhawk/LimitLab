@@ -10,6 +10,7 @@ export class ClientService {
         bucketState: true,
         windowState: true,
         slidingWindowState: true,
+        leakyBucketState: true,
         statistics: true,
       },
       orderBy: { createdAt: 'desc' }
@@ -24,6 +25,7 @@ export class ClientService {
         bucketState: true,
         windowState: true,
         slidingWindowState: true,
+        leakyBucketState: true,
         statistics: true,
       }
     });
@@ -138,8 +140,25 @@ export class ClientService {
             windowDurationMs: windowDurationMs,
           }
         });
-        // No explicit state model needed for Sliding Log initially,
-        // timestamps are created dynamically on requests.
+      } else if (algorithm === RateLimitAlgorithm.LEAKY_BUCKET) {
+        const capacity = data.capacity ?? 10;
+        const leakRate = data.refillRate ?? 1;
+
+        await tx.rateLimitConfiguration.create({
+          data: {
+            clientId: client.id,
+            algorithm: RateLimitAlgorithm.LEAKY_BUCKET,
+            queueCapacity: capacity,
+            leakRate: leakRate,
+          }
+        });
+
+        await tx.leakyBucketState.create({
+          data: {
+            clientId: client.id,
+            queueLength: 0,
+          }
+        });
       }
 
       await tx.clientStatistics.create({
@@ -150,7 +169,7 @@ export class ClientService {
 
       return tx.client.findUnique({
         where: { id: client.id },
-        include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true, statistics: true }
+        include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true, leakyBucketState: true, statistics: true }
       });
     });
   }
@@ -220,17 +239,26 @@ export class ClientService {
               requestsPerSecond: data.requestLimit,
             }
           });
-          
+
           if (config?.algorithm === RateLimitAlgorithm.SLIDING_LOG) {
-            // Optional: When updating config, we could clear the log or just let it naturally expire based on the new window
-            // We'll let it naturally expire, no need to delete.
           }
+        }
+      } else if (config?.algorithm === RateLimitAlgorithm.LEAKY_BUCKET) {
+        if (data.capacity !== undefined || data.refillRate !== undefined) {
+          await tx.rateLimitConfiguration.update({
+            where: { clientId: id },
+            data: {
+              queueCapacity: data.capacity,
+              leakRate: data.refillRate,
+            }
+          });
+
         }
       }
 
       return tx.client.findUnique({
         where: { id },
-        include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true }
+        include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true, leakyBucketState: true }
       });
     });
   }
