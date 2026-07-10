@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Activity, SlidersHorizontal, BarChart3, Settings, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Settings, Menu, X } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { Button } from '../../../components/ui/Button';
 
@@ -13,8 +13,6 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Simulator', href: '/simulator', icon: Activity },
-  { name: 'Comparison', href: '/comparison', icon: SlidersHorizontal },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -25,8 +23,8 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen }: SidebarProps) => 
     <>
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden" 
+        <div
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -45,10 +43,10 @@ export const Sidebar = ({ mobileMenuOpen, setMobileMenuOpen }: SidebarProps) => 
           )}>
             LimitLab
           </span>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => mobileMenuOpen ? setMobileMenuOpen(false) : setCollapsed(!collapsed)} 
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => mobileMenuOpen ? setMobileMenuOpen(false) : setCollapsed(!collapsed)}
             className={cn("shrink-0", (collapsed && !mobileMenuOpen) && "mx-auto")}
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

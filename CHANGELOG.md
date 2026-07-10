@@ -4,11 +4,25 @@ All notable changes to LimitLab will be documented in this file.
 
 ## [0.9.0] - 2026-07-10
 ### Added
-- **Phase 9: Leaky Bucket Rate Limiter**: Implemented a production-grade Leaky Bucket algorithm.
-- Added PostgreSQL-backed Leaky Bucket implementation using Optimistic Concurrency Control (OCC).
-- Built high-performance in-memory Leaky Bucket implementation.
-- Integrated Leaky Bucket into the interactive Simulation Engine with a custom UI visualizer.
-- Extended the Client Configuration UI and Playground APIs for the new algorithm.
+- Implemented Leaky Bucket rate limiting algorithm
+- Added PostgreSQL-backed Leaky Bucket implementation with persistent queue state
+- Built in-memory Leaky Bucket implementation using bounded LRU cache
+- Implemented constant leak-rate processing with automatic queue draining
+- Added queue capacity management with allow/deny decision logic
+- Integrated Leaky Bucket into the existing client configuration workflow
+- Extended algorithm selection to support all five rate limiting algorithms
+- Added dedicated database and in-memory Leaky Bucket API endpoints
+- Integrated Leaky Bucket into the existing Playground
+- Extended the Simulation page with queue visualization, leak animation, and algorithm comparison
+- Added queue length, remaining capacity, leak rate, Retry-After, and reset time calculations
+- Implemented standard rate limiting response headers
+- Added comprehensive TypeScript load testing covering burst traffic, queue draining, refill behavior, and capacity validation
+- Added downloadable JavaScript load testing script for external developer testing
+- Added backend validation, error handling, and consistent response formatting
+- Documented Leaky Bucket architecture, traffic shaping, complexity, advantages, disadvantages, and real-world use cases
+- Added comparisons with Token Bucket, Fixed Window, Sliding Window Counter, and Sliding Log
+- Preserved compatibility with existing algorithms, Playground, Simulation, client management, and testing infrastructure
+- Verified algorithm behavior through automated load testing
 
 ## [0.8.0] - 2026-07-10
 ### Added
