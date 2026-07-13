@@ -1,7 +1,33 @@
 import { Router } from 'express';
 import { RateLimitController } from '../controllers/rateLimit.controller';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
+
+const sandboxLimiter = rateLimit({
+  windowMs: 1000, 
+  max: 500, 
+  message: {
+    error: 'Testing Ceiling Reached',
+    message: 'Sandbox burst rate limit exceeded (500 req/sec). Please slow down your load tests.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const sustainedSandboxLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3000, // Limit each IP to 3,000 sandbox requests per window
+  message: {
+    error: 'Sustained Sandbox Limit Reached',
+    message: 'You have made too many sandbox test requests (3000 req/15min). Please take a break and try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.use(sandboxLimiter);
+router.use(sustainedSandboxLimiter);
 
 router.post('/', RateLimitController.process);
 router.get('/', RateLimitController.process);

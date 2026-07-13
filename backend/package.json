@@ -1,6 +1,6 @@
 {
   "name": "limitlab-backend",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "LimitLab backend",
   "main": "dist/index.js",
   "scripts": {
@@ -13,7 +13,12 @@
     "test:load:fw": "ts-node tests/fixedWindowLoadTest.ts",
     "test:load:sw": "ts-node tests/slidingWindowLoadTest.ts",
     "test:load:sl": "ts-node tests/slidingLogLoadTest.ts",
-    "test:load:lb": "ts-node tests/leakyBucketLoadTest.ts"
+    "test:load:lb": "ts-node tests/leakyBucketLoadTest.ts",
+    "test:dl:tb": "node tests/downloadedTestTokenBucket.js",
+    "test:dl:fw": "node tests/downloadedTestFixedWindow.js",
+    "test:dl:sw": "node tests/downloadedTestSlidingWindow.js",
+    "test:dl:sl": "node tests/downloadedTestSlidingLog.js",
+    "test:dl:lb": "node tests/downloadedTestLeakyBucket.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
@@ -22,6 +27,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
     "helmet": "^7.1.0",
     "lru-cache": "^11.5.1",
     "morgan": "^1.10.0",

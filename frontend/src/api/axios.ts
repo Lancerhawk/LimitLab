@@ -7,4 +7,12 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use((config) => {
+  const adminKey = localStorage.getItem('adminKey');
+  if (adminKey) {
+    config.headers['x-admin-key'] = adminKey;
+  }
+  return config;
+});
+
 export default api;

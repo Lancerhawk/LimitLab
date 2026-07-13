@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatCard } from '../components/common/StatCard';
-import { Activity, Users, Zap, ShieldCheck, AreaChart, Cpu } from 'lucide-react';
+import { Activity, Users, Zap, ShieldCheck, AreaChart, Cpu, Info } from 'lucide-react';
 import { getDashboardStats, type DashboardStats } from '../api/dashboard';
 
 export const DashboardPage = () => {
@@ -32,6 +32,20 @@ export const DashboardPage = () => {
         title="Dashboard" 
         description="Real-time overview of your rate limiting infrastructure." 
       />
+
+      {/* Global Rate Limit Notice */}
+      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-500 rounded-xl p-4 flex gap-3 text-sm items-start">
+        <Info className="w-5 h-5 shrink-0 mt-0.5" />
+        <div>
+          <strong className="block mb-1 font-semibold text-blue-400">Public Sandbox Restrictions Active</strong>
+          To prevent abuse, this public sandbox instance enforces strict global limits:
+          <ol className="list-decimal pl-5 mt-2 space-y-1">
+            <li><strong>Hard Sandbox Burst Ceiling:</strong> 500 requests per second maximum for in-memory algorithm load testing.</li>
+            <li><strong>Sandbox Sustained Limit:</strong> 3,000 requests per 15 minutes for in-memory testing.</li>
+            <li><strong>Global API Limit:</strong> 100 requests per 15 minutes for all other endpoints (including database-backed algorithm testing).</li>
+          </ol>
+        </div>
+      </div>
 
       {/* Primary Stats */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">

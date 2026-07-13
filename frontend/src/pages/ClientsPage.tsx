@@ -7,11 +7,13 @@ import { Modal } from '../components/ui/Modal';
 import { Card, CardContent } from '../components/ui/Card';
 import { Users, Plus, Key, Trash2, Cpu, Activity, Clock, Pencil, AlertTriangle, Timer, ChevronDown } from 'lucide-react';
 import { getClients, createClient, updateClient, deleteClient, type Client } from '../api/clients';
+import toast from 'react-hot-toast';
 
 const ClientsPage = () => {
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -42,6 +44,7 @@ const ClientsPage = () => {
 
   useEffect(() => {
     fetchClients();
+    setIsAdmin(!!localStorage.getItem('adminKey'));
   }, []);
 
   const resetForm = () => {
@@ -108,8 +111,10 @@ const ClientsPage = () => {
       setIsCreateModalOpen(false);
       resetForm();
       await fetchClients();
-    } catch (error) {
+      toast.success('Client created successfully');
+    } catch (error: any) {
       console.error('Failed to create client', error);
+      toast.error(error.response?.data?.message || 'Failed to create client');
     } finally {
       setIsSubmitting(false);
     }
@@ -139,8 +144,10 @@ const ClientsPage = () => {
       setIsEditModalOpen(false);
       resetForm();
       await fetchClients();
-    } catch (error) {
+      toast.success('Client updated successfully');
+    } catch (error: any) {
       console.error('Failed to update client', error);
+      toast.error(error.response?.data?.message || 'Failed to update client');
     } finally {
       setIsSubmitting(false);
     }
@@ -154,8 +161,10 @@ const ClientsPage = () => {
       setIsDeleteModalOpen(false);
       resetForm();
       await fetchClients();
-    } catch (error) {
+      toast.success('Client deleted successfully');
+    } catch (error: any) {
       console.error('Failed to delete client', error);
+      toast.error(error.response?.data?.message || 'Failed to delete client');
     } finally {
       setIsSubmitting(false);
     }
@@ -250,12 +259,14 @@ const ClientsPage = () => {
               {client.description && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{client.description}</p>}
             </div>
             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity -mr-2 -mt-2">
-              <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(client)} className="text-muted-foreground hover:text-primary h-8 w-8">
+              <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(client)} className="text-muted-foreground hover:text-primary h-8 w-8" title="Edit Configuration">
                 <Pencil className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => handleOpenDelete(client)} className="text-muted-foreground hover:text-destructive h-8 w-8">
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isAdmin && (
+                <Button variant="ghost" size="icon" onClick={() => handleOpenDelete(client)} className="text-muted-foreground hover:text-destructive h-8 w-8" title="Delete Client">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 
@@ -355,16 +366,17 @@ const ClientsPage = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <PageHeader
-          title="Clients"
-          description="Manage API keys and rate limit configurations for your consumers."
-        />
-        <Button onClick={handleOpenCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Client
-        </Button>
-      </div>
+      <PageHeader
+        title="Clients"
+        description="Manage and test rate limits across different algorithms and configurations."
+      >
+        {isAdmin && (
+          <Button onClick={handleOpenCreate} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            New Client
+          </Button>
+        )}
+      </PageHeader>
 
       {loading ? (
         <div className="flex items-center justify-center min-h-[300px]">
@@ -377,9 +389,9 @@ const ClientsPage = () => {
           </div>
           <h3 className="text-xl font-bold text-foreground mb-3">No clients configured</h3>
           <p className="text-muted-foreground max-w-md leading-relaxed mb-6">
-            You don't have any clients configured yet. Create a client to generate an API key and start rate limiting traffic.
+            You don't have any clients configured yet. {isAdmin ? 'Create a client to generate an API key and start rate limiting traffic.' : 'An administrator must create the first client.'}
           </p>
-          <Button onClick={handleOpenCreate}>Create First Client</Button>
+          {isAdmin && <Button onClick={handleOpenCreate}>Create First Client</Button>}
         </section>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">

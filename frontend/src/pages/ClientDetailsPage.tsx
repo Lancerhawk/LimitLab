@@ -7,7 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { getClientById, type Client } from '../api/clients';
 import { evaluateRateLimit, evaluateFixedWindowRateLimit, evaluateSlidingWindowRateLimit, evaluateSlidingLogRateLimit, evaluateLeakyBucketRateLimit } from '../api/rateLimit';
-import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code, Timer } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Clock, Cpu, Activity, Play, RefreshCw, Zap, ShieldAlert, Terminal, Download, Code, Timer, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface RequestLog {
@@ -79,11 +79,10 @@ const ClientDetailsPage = () => {
 
         const elapsedMs = Math.max(0, Date.now() - lastLeakTime.getTime());
         const elapsedSeconds = elapsedMs / 1000;
-        
+
         return Math.max(0, queueLength - (elapsedSeconds * leakRate));
       };
-      
-      // Update queue length in liveTokens just so we have a number to show
+
       setLiveTokens(calculateLeakyBucketQueue());
       const interval = setInterval(() => {
         setLiveTokens(calculateLeakyBucketQueue());
@@ -99,7 +98,7 @@ const ClientDetailsPage = () => {
 
         const resetTimeMs = new Date(client.windowState.resetTime).getTime();
         if (Date.now() >= resetTimeMs) {
-          return limit; // Window has passed, tokens are reset
+          return limit;
         }
 
         return Math.max(0, limit - (client.windowState.requestCount ?? 0));
@@ -109,7 +108,7 @@ const ClientDetailsPage = () => {
 
       const interval = setInterval(() => {
         setLiveTokens(calculateFixedWindowTokens());
-      }, 1000); // Check every second to see if window expired
+      }, 1000);
 
       return () => clearInterval(interval);
     }
@@ -124,7 +123,6 @@ const ClientDetailsPage = () => {
         const durationMs = client.configuration!.windowDurationMs ?? 60000;
         const currentWindow = Math.floor(now / durationMs);
 
-        // Note: resetTime is (currentWindow + 1) * durationMs when it was last saved
         const storedWindow = Math.floor((new Date(client.slidingWindowState.resetTime).getTime() - durationMs) / durationMs);
 
         let curCount = 0;
@@ -187,16 +185,30 @@ const ClientDetailsPage = () => {
   const downloadScript = (language: 'node' | 'python' | 'bash', variant: 'ip' | 'client' | 'advanced') => {
     if (!client) return;
 
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+
     const endpoint = isFixedWindow
-      ? 'http://localhost:3001/api/v1/rate-limit/fixed-window/memory'
+      ? `${baseUrl}/rate-limit/fixed-window/memory`
       : isSlidingWindow
-        ? 'http://localhost:3001/api/v1/rate-limit/sliding-window/memory'
+        ? `${baseUrl}/rate-limit/sliding-window/memory`
         : isSlidingLog
-          ? 'http://localhost:3001/api/v1/rate-limit/sliding-log/memory'
+          ? `${baseUrl}/rate-limit/sliding-log/memory`
           : isLeakyBucket
-            ? 'http://localhost:3001/api/v1/rate-limit/leaky-bucket/memory'
-            : 'http://localhost:3001/api/v1/rate-limit/memory';
-    const waitS = isFixedWindow || isSlidingWindow || isSlidingLog ? 61 : isLeakyBucket ? 15 : 12;
+            ? `${baseUrl}/rate-limit/leaky-bucket/memory`
+            : `${baseUrl}/rate-limit/memory`;
+
+    const limit = variant === 'client'
+      ? (client.configuration?.burstSize ?? client.configuration?.requestsPerSecond ?? client.configuration?.queueCapacity ?? 10)
+      : 10;
+
+    const windowDurationS = variant === 'client'
+      ? (client.configuration?.windowDurationMs ? client.configuration.windowDurationMs / 1000 : 60)
+      : 60;
+
+    const leakRate = variant === 'client' ? (client.configuration?.leakRate ?? 1) : 1;
+    const refillRate = variant === 'client' ? (client.configuration?.refillRate ?? 1) : 1;
+
+    const waitS = isFixedWindow || isSlidingWindow || isSlidingLog ? windowDurationS + 1 : isLeakyBucket ? Math.ceil(limit / Math.max(0.1, leakRate)) + 2 : Math.ceil(limit / Math.max(0.1, refillRate)) + 2;
     const waitMsg = isFixedWindow || isSlidingWindow || isSlidingLog ? 'for window to reset' : isLeakyBucket ? 'for queue to drain' : 'for refill';
 
     let content = '';
@@ -205,7 +217,7 @@ const ClientDetailsPage = () => {
 
     if (language === 'node') {
       filename = `load_test${fileSuffix}.js`;
-      const headerCode = variant === 'advanced' ? `, {\n      headers: { 'x-client-id': 'simulated-user-' + requestNumber },\n      validateStatus: () => true\n    }` : variant === 'client' ? `, {\n      headers: { 'x-client-id': '${client.id}' },\n      validateStatus: () => true\n    }` : `, {\n      validateStatus: () => true\n    }`;
+      const headerCode = variant === 'advanced' ? `, {\n      headers: { 'x-client-id': 'simulated-user-' + requestNumber },\n      validateStatus: () => true\n    }` : variant === 'client' ? `, {\n      headers: { 'x-client-id': '${client.apiKey}' },\n      validateStatus: () => true\n    }` : `, {\n      validateStatus: () => true\n    }`;
       content = `const axios = require('axios');
 
 const ENDPOINT = '${endpoint}';
@@ -235,36 +247,49 @@ async function runSequential(count, delayMs) {
   return results;
 }
 
-function printResults(name, results) {
-  console.log(\`\\n--- \${name} ---\`);
+function printResults(name, results, expectedAllowed) {
+  console.log(\`\n--- \${name} ---\`);
   const allowed = results.filter(r => r.decision === 'ALLOW').length;
   const denied = results.filter(r => r.decision === 'DENY').length;
-  console.log(\`Allowed: \${allowed}, Denied: \${denied}\`);
+  const expectedDenied = results.length - expectedAllowed;
+  const pass = allowed === expectedAllowed && denied === expectedDenied;
+  console.log(\`Allowed: \${allowed} (Expected: \${expectedAllowed})\`);
+  console.log(\`Denied:  \${denied} (Expected: \${expectedDenied})\`);
+  console.log(\`Status:  \${pass ? 'PASS ✅' : 'FAIL ❌'}\`);
+  return pass;
 }
 
 async function run() {
-  console.log(\`Starting tests against \${ENDPOINT}...\\n\`);
+  console.log(\`Starting tests against \${ENDPOINT}...\n\`);
+  const results = [];
 
-  printResults("TEST 1: 10 Simultaneous", await runSimultaneous(10));
+  results.push(printResults("TEST 1: ${limit} Simultaneous", await runSimultaneous(${limit}), ${limit}));
   console.log("Waiting ${waitS}s ${waitMsg}...");
   await new Promise(r => setTimeout(r, ${waitS * 1000}));
 
-  printResults("TEST 2: 11 Simultaneous", await runSimultaneous(11));
+  results.push(printResults("TEST 2: ${limit + 1} Simultaneous", await runSimultaneous(${limit + 1}), ${limit}));
   console.log("Waiting ${waitS}s ${waitMsg}...");
   await new Promise(r => setTimeout(r, ${waitS * 1000}));
 
-  printResults("TEST 3: 20 Simultaneous", await runSimultaneous(20));
+  results.push(printResults("TEST 3: ${limit * 2} Simultaneous", await runSimultaneous(${limit * 2}), ${limit}));
   console.log("Waiting ${waitS}s ${waitMsg}...");
   await new Promise(r => setTimeout(r, ${waitS * 1000}));
 
-  printResults("TEST 4: 15 Sequential (100ms delay)", await runSequential(15, 100));
+  results.push(printResults("TEST 4: ${limit + 5} Sequential (100ms delay)", await runSequential(${limit + 5}, 100), ${limit}));
+
+  console.log('\n======================================');
+  if (results.every(r => r)) {
+    console.log('🎉 ALL TESTS PASSED SUCCESSFULLY 🎉');
+  } else {
+    console.log('💥 SOME TESTS FAILED 💥');
+  }
 }
 
 run();
 `;
     } else if (language === 'python') {
       filename = `load_test${fileSuffix}.py`;
-      const headerCode = variant === 'advanced' ? `headers={'x-client-id': f'simulated-user-{i}'}` : variant === 'client' ? `headers={'x-client-id': '${client.id}'}` : ``;
+      const headerCode = variant === 'advanced' ? `headers={'x-client-id': f'simulated-user-{i}'}` : variant === 'client' ? `headers={'x-client-id': '${client.apiKey}'}` : ``;
       content = `import requests
 import concurrent.futures
 import time
@@ -290,67 +315,120 @@ def run_sequential(count, delay_ms):
             time.sleep(delay_ms / 1000.0)
     return results
 
-def print_results(name, results):
+def print_results(name, results, expected_allowed):
     print(f"\\n--- {name} ---")
     allowed = results.count('ALLOW')
     denied = results.count('DENY')
-    print(f"Allowed: {allowed}, Denied: {denied}")
+    expected_denied = len(results) - expected_allowed
+    passed = allowed == expected_allowed and denied == expected_denied
+    print(f"Allowed: {allowed} (Expected: {expected_allowed})")
+    print(f"Denied:  {denied} (Expected: {expected_denied})")
+    print(f"Status:  {'PASS ✅' if passed else 'FAIL ❌'}")
+    return passed
 
 print(f"Starting tests against {ENDPOINT}...\\n")
+test_results = []
 
-print_results("TEST 1: 10 Simultaneous", run_simultaneous(10))
+test_results.append(print_results("TEST 1: ${limit} Simultaneous", run_simultaneous(${limit}), ${limit}))
 print("Waiting ${waitS}s ${waitMsg}...")
 time.sleep(${waitS})
 
-print_results("TEST 2: 11 Simultaneous", run_simultaneous(11))
+test_results.append(print_results("TEST 2: ${limit + 1} Simultaneous", run_simultaneous(${limit + 1}), ${limit}))
 print("Waiting ${waitS}s ${waitMsg}...")
 time.sleep(${waitS})
 
-print_results("TEST 3: 20 Simultaneous", run_simultaneous(20))
+test_results.append(print_results("TEST 3: ${limit * 2} Simultaneous", run_simultaneous(${limit * 2}), ${limit}))
 print("Waiting ${waitS}s ${waitMsg}...")
 time.sleep(${waitS})
 
-print_results("TEST 4: 15 Sequential (100ms delay)", run_sequential(15, 100))
+test_results.append(print_results("TEST 4: ${limit + 5} Sequential (100ms delay)", run_sequential(${limit + 5}, 100), ${limit}))
+
+print("\\n======================================")
+if all(test_results):
+    print("🎉 ALL TESTS PASSED SUCCESSFULLY 🎉")
+else:
+    print("💥 SOME TESTS FAILED 💥")
 `;
     } else if (language === 'bash') {
       filename = `load_test${fileSuffix}.sh`;
-      const headerCode = variant === 'advanced' ? ` -H "x-client-id: simulated-user-$i"` : variant === 'client' ? ` -H "x-client-id: ${client.id}"` : ``;
+      const headerCode = variant === 'advanced' ? ` -H "x-client-id: simulated-user-$i"` : variant === 'client' ? ` -H "x-client-id: ${client.apiKey}"` : ``;
       content = `#!/bin/bash
 ENDPOINT="${endpoint}"
 
 echo "Starting tests against $ENDPOINT..."
 
+PASS_COUNT=0
+TOTAL_TESTS=4
+
 run_simultaneous() {
-  echo -e "\\n--- TEST: $1 Simultaneous ---"
-  for i in $(seq 1 $1); do
-    curl -s -X POST "$ENDPOINT"${headerCode} &
+  local count=$1
+  local expected_allowed=$2
+  local test_name=$3
+  echo -e "\\n--- $test_name ---"
+  local allowed=0
+  local denied=0
+  local tmpdir=$(mktemp -d)
+  for i in $(seq 1 $count); do
+    (curl -s -X POST "$ENDPOINT"${headerCode} | grep -o '"decision":"[A-Z]*"' > "$tmpdir/r$i") &
   done
   wait
-  echo -e "\\nDone."
+  for f in "$tmpdir"/r*; do
+    if grep -q 'ALLOW' "$f" 2>/dev/null; then allowed=$((allowed+1)); else denied=$((denied+1)); fi
+  done
+  rm -rf "$tmpdir"
+  local expected_denied=$((count - expected_allowed))
+  echo "Allowed: $allowed (Expected: $expected_allowed)"
+  echo "Denied:  $denied (Expected: $expected_denied)"
+  if [ "$allowed" -eq "$expected_allowed" ] && [ "$denied" -eq "$expected_denied" ]; then
+    echo "Status:  PASS ✅"
+    PASS_COUNT=$((PASS_COUNT+1))
+  else
+    echo "Status:  FAIL ❌"
+  fi
 }
 
 run_sequential() {
-  echo -e "\\n--- TEST: $1 Sequential (100ms delay) ---"
-  for i in $(seq 1 $1); do
-    curl -s -X POST "$ENDPOINT"${headerCode}
-    echo ""
+  local count=$1
+  local expected_allowed=$2
+  echo -e "\\n--- TEST 4: $count Sequential (100ms delay) ---"
+  local allowed=0
+  local denied=0
+  for i in $(seq 1 $count); do
+    result=$(curl -s -X POST "$ENDPOINT"${headerCode})
+    if echo "$result" | grep -q '"decision":"ALLOW"'; then allowed=$((allowed+1)); else denied=$((denied+1)); fi
     sleep 0.1
   done
+  local expected_denied=$((count - expected_allowed))
+  echo "Allowed: $allowed (Expected: $expected_allowed)"
+  echo "Denied:  $denied (Expected: $expected_denied)"
+  if [ "$allowed" -eq "$expected_allowed" ] && [ "$denied" -eq "$expected_denied" ]; then
+    echo "Status:  PASS ✅"
+    PASS_COUNT=$((PASS_COUNT+1))
+  else
+    echo "Status:  FAIL ❌"
+  fi
 }
 
-run_simultaneous 10
+run_simultaneous ${limit} ${limit} "TEST 1: ${limit} Simultaneous"
 echo -e "\\nWaiting ${waitS}s ${waitMsg}..."
 sleep ${waitS}
 
-run_simultaneous 11
+run_simultaneous ${limit + 1} ${limit} "TEST 2: ${limit + 1} Simultaneous"
 echo -e "\\nWaiting ${waitS}s ${waitMsg}..."
 sleep ${waitS}
 
-run_simultaneous 20
+run_simultaneous ${limit * 2} ${limit} "TEST 3: ${limit * 2} Simultaneous"
 echo -e "\\nWaiting ${waitS}s ${waitMsg}..."
 sleep ${waitS}
 
-run_sequential 15
+run_sequential ${limit + 5} ${limit}
+
+echo -e "\\n======================================"
+if [ "$PASS_COUNT" -eq "$TOTAL_TESTS" ]; then
+  echo "🎉 ALL TESTS PASSED SUCCESSFULLY 🎉"
+else
+  echo "💥 SOME TESTS FAILED 💥"
+fi
 `;
     }
 
@@ -378,7 +456,6 @@ run_sequential 15
 
     for (let i = 0; i < safeCount; i++) {
       const execute = async () => {
-        // Stagger requests exactly by the delay amount, instead of waiting for network roundtrips
         if (safeDelay > 0 && i > 0) {
           await new Promise(resolve => setTimeout(resolve, safeDelay * i));
         }
@@ -406,7 +483,7 @@ run_sequential 15
 
           setLogs(prev => {
             const newLogs = [logEntry, ...prev];
-            return newLogs.slice(0, 1000); // Keep up to 1000 for accurate local simulation
+            return newLogs.slice(0, 1000);
           });
 
           setSessionStats(prev => ({
@@ -415,7 +492,6 @@ run_sequential 15
             denied: prev.denied + (response.decision === 'DENY' ? 1 : 0)
           }));
 
-          // Update local client state for visualization instantly
           setClient(prev => {
             if (!prev) return prev;
 
@@ -423,7 +499,6 @@ run_sequential 15
               const limit = prev.configuration?.requestsPerSecond ?? 10;
               const durationMs = prev.configuration?.windowDurationMs ?? 60000;
 
-              // Calculate the correct current window reset time locally
               const now = Date.now();
               const currentWindow = Math.floor(now / durationMs);
               const calculatedResetTime = new Date((currentWindow + 1) * durationMs).toISOString();
@@ -471,7 +546,6 @@ run_sequential 15
             }
 
             if (isSlidingLog) {
-              // Sliding Log: update liveTokens directly from the response
               const remaining = response.remainingRequests ?? 0;
               setLiveTokens(remaining);
               return prev;
@@ -481,7 +555,7 @@ run_sequential 15
               const capacity = prev.configuration?.queueCapacity ?? 10;
               const leakRate = prev.configuration?.leakRate ?? 1;
               const queueLength = response.queueLength ?? 0;
-              
+
               return {
                 ...prev,
                 leakyBucketState: {
@@ -537,7 +611,6 @@ run_sequential 15
   const resetPlayground = () => {
     setLogs([]);
     setSessionStats({ total: 0, allowed: 0, denied: 0 });
-    // Refetch client to get accurate state from DB
     fetchClient();
   };
 
@@ -562,7 +635,6 @@ run_sequential 15
     const activeLogs = logs.filter(l => l.decision === 'ALLOW' && Date.now() - l.timestamp.getTime() < windowMs);
     currentTokens = Math.max(0, limit - activeLogs.length);
   } else if (isLeakyBucket) {
-    // For leaky bucket, we want to show remaining slots instead of queue length for consistency
     currentTokens = Math.max(0, capacity - Math.floor(liveTokens));
   }
   const percentFull = Math.max(0, Math.min(100, (currentTokens / capacity) * 100));
@@ -580,7 +652,6 @@ run_sequential 15
         />
       </div>
 
-      {/* CLIENT DETAILS CARD */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="bg-muted/20 border-b border-border/50 pb-4">
           <CardTitle className="text-lg flex justify-between items-center">
@@ -658,7 +729,6 @@ run_sequential 15
         </CardContent>
       </Card>
 
-      {/* REQUEST PLAYGROUND */}
       <Card className="border-primary/20 shadow-sm border-2">
         <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
           <CardTitle className="text-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-primary">
@@ -673,7 +743,6 @@ run_sequential 15
         </CardHeader>
         <CardContent className="pt-6 space-y-8">
 
-          {/* Info Panel */}
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-blue-500 mb-2 flex items-center gap-2">
               About Request Timing
@@ -691,10 +760,28 @@ run_sequential 15
             </div>
           </div>
 
-          {/* Controls & Visualizer Row */}
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-amber-500 mb-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Public Sandbox Restrictions
+            </h4>
+            <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
+              <p>
+                To prevent abuse, this deployed instance has strict global limits active:
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Sandbox Burst Ceiling:</strong> The in-memory algorithms tested here are capped at an absolute maximum of <strong>500 requests per second</strong>.</li>
+                <li><strong>Sandbox Sustained Limit:</strong> You may only perform a maximum of <strong>3,000 sandbox test requests per 15 minutes</strong> per IP address.</li>
+                <li><strong>Global API Limit:</strong> All other backend interactions (creating clients, loading dashboards) are limited to <strong>100 requests per 15 minutes</strong> per IP address.</li>
+              </ul>
+              <p>
+                If you exceed the ceiling during a burst test, your browser will receive a 429 Too Many Requests response from the global defender before the request even reaches your client's specific algorithm bucket.
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-            {/* Control Panel */}
             <div className="space-y-6">
               <div className="space-y-4 p-5 rounded-xl border border-border/50 bg-muted/10">
                 <div className="space-y-2">
@@ -853,11 +940,11 @@ run_sequential 15
                     <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, var(--border) 1px, transparent 1px)', backgroundSize: '100% 8px' }} />
                     <div className="absolute top-0 right-0 p-1 text-[8px] text-muted-foreground font-mono rotate-180 z-20">OUT (LEAK)</div>
                     <div className="absolute bottom-0 right-0 p-1 text-[8px] text-muted-foreground font-mono rotate-180 z-20">IN</div>
-                    
+
                     {Array.from({ length: Math.min(capacity, 50) }).map((_, i) => (
-                      <div 
-                        key={i} 
-                        className={`flex-1 rounded-sm transition-all duration-300 ${i < Math.floor(liveTokens) ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)] h-[90%]' : 'bg-muted/30 border border-border/50 h-[30%]'}`} 
+                      <div
+                        key={i}
+                        className={`flex-1 rounded-sm transition-all duration-300 ${i < Math.ceil(liveTokens) ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)] h-[90%]' : 'bg-muted/30 border border-border/50 h-[30%]'}`}
                       />
                     ))}
                   </div>
@@ -1017,19 +1104,26 @@ run_sequential 15
         isOpen={isDownloadModalOpen}
         onClose={() => setIsDownloadModalOpen(false)}
         title={`Download ${isFixedWindow ? 'Fixed Window' : isSlidingWindow ? 'Sliding Window' : isSlidingLog ? 'Sliding Log' : isLeakyBucket ? 'Leaky Bucket' : 'Token Bucket'} Scripts`}
-        description="Choose the type of load testing script you want to download."
+        description="Choose a pre-configured load testing script. You can run these from your local terminal to see the rate limiter in action."
         className="max-w-2xl"
       >
-        <div className="space-y-6 mt-4">
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4 mt-2">
+          <p className="text-xs text-amber-600 font-medium flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span><strong>Sandbox Limits:</strong> All downloaded scripts hit the /memory endpoints which are protected by a global <strong>500 req/sec burst limit</strong> and a <strong>3,000 req/15min sustained limit</strong>. If you run multiple scripts simultaneously and exceed 500 requests within a single second, the global sandbox defender will instantly block the excess traffic.</span>
+          </p>
+        </div>
+
+        <div className="space-y-6 mt-2">
           <div className="space-y-3 p-4 border border-border/50 rounded-lg bg-card">
             <h4 className="font-semibold text-foreground flex items-center gap-2">
               <Terminal className="h-4 w-4 text-primary" />
               Basic Sandbox Script (IP-Based)
             </h4>
             <p className="text-sm text-muted-foreground">
-              A perfectly isolated script that hits the in-memory endpoint using your IP address. No client headers are sent.
+              A standalone test script that hits the in-memory endpoint using your local IP address. <strong>No client headers are sent.</strong>
               {isLeakyBucket && " Watch how requests queue up and smoothly leak out."}
-              Ideal for running simple local tests without affecting this specific client's bucket.
+              Use this script to safely verify global rate-limiting behavior without affecting this specific client's bucket state.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => downloadScript('node', 'ip')}>Node.js</Button>
@@ -1044,8 +1138,8 @@ run_sequential 15
               Targeted Sandbox Script (Client ID)
             </h4>
             <p className="text-sm text-muted-foreground">
-              This script injects <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id: {client.id}</code> into every request.
-              Use this to test the specific limits and configuration applied to THIS client.
+              This targeted script automatically injects <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id: {client.id}</code> into every request.
+              Use this script to precisely validate the exact configuration, capacity limits, and refill/leak behavior assigned to this specific client.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => downloadScript('node', 'client')}>Node.js</Button>
@@ -1060,9 +1154,9 @@ run_sequential 15
               Advanced Multi-Client Script (Simulated Users)
             </h4>
             <p className="text-sm text-muted-foreground">
-              A high-performance script that injects unique <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id</code> headers
-              to simulate hundreds of <strong>completely distinct users</strong> hammering the {isSlidingLog ? 'Sliding Log' : isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : isLeakyBucket ? 'Leaky Bucket' : 'Token Bucket'}
-              algorithm at the exact same time. Essential for testing concurrent system isolation.
+              A high-concurrency simulation that dynamically injects unique <code className="text-xs bg-background px-1 py-0.5 rounded border">x-client-id</code> headers per request.
+              This simulates hundreds of <strong>completely distinct users</strong> hitting the {isSlidingLog ? 'Sliding Log' : isSlidingWindow ? 'Sliding Window' : isFixedWindow ? 'Fixed Window' : isLeakyBucket ? 'Leaky Bucket' : 'Token Bucket'} algorithm simultaneously.
+              Essential for verifying memory isolation and concurrency safety under heavy load. Note: This script respects the global 500 req/sec sandbox ceiling.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button variant="default" className="flex-1" onClick={() => downloadScript('node', 'advanced')}>Node.js</Button>

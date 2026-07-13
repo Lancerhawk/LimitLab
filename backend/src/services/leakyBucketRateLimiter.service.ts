@@ -39,7 +39,6 @@ export class LeakyBucketRateLimiterService {
       throw new Error('Algorithm not supported by this endpoint');
     }
 
-    // Map UI concepts (queueCapacity, leakRate) to the schema fields
     const queueCapacity = client.configuration.queueCapacity ?? 10;
     const leakRate = client.configuration.leakRate ?? 1;
 

@@ -55,14 +55,16 @@ export class RateLimitController {
       res.status(500).json({ error: 'Rate limiter error', details: error.message });
     }
   }
-  static processMemory(req: Request, res: Response) {
+  static async processMemory(req: Request, res: Response) {
     try {
       let clientId = req.headers['x-client-id'] as string;
+      let isRealClient = true;
       if (!clientId) {
         clientId = req.ip || 'unknown-client';
+        isRealClient = false;
       }
 
-      const result = InMemoryRateLimiterService.processRequest(clientId);
+      const result = await InMemoryRateLimiterService.processRequest(clientId, isRealClient);
 
       res.setHeader('X-RateLimit-Limit', result.capacity.toString());
       res.setHeader('X-RateLimit-Remaining', Math.floor(result.remainingTokens).toString());
@@ -136,14 +138,16 @@ export class RateLimitController {
     }
   }
 
-  static processFixedWindowMemory(req: Request, res: Response) {
+  static async processFixedWindowMemory(req: Request, res: Response) {
     try {
       let clientId = req.headers['x-client-id'] as string;
+      let isRealClient = true;
       if (!clientId) {
         clientId = req.ip || 'unknown-client';
+        isRealClient = false;
       }
 
-      const result = InMemoryFixedWindowRateLimiterService.processRequest(clientId);
+      const result = await InMemoryFixedWindowRateLimiterService.processRequest(clientId, isRealClient);
 
       res.setHeader('X-RateLimit-Limit', result.capacity.toString());
       res.setHeader('X-RateLimit-Remaining', result.remainingTokens.toString());
@@ -217,14 +221,16 @@ export class RateLimitController {
     }
   }
 
-  static processSlidingWindowMemory(req: Request, res: Response) {
+  static async processSlidingWindowMemory(req: Request, res: Response) {
     try {
       let clientId = req.headers['x-client-id'] as string;
+      let isRealClient = true;
       if (!clientId) {
         clientId = req.ip || 'unknown-client';
+        isRealClient = false;
       }
 
-      const result = InMemorySlidingWindowRateLimiterService.processRequest(clientId);
+      const result = await InMemorySlidingWindowRateLimiterService.processRequest(clientId, isRealClient);
 
       res.setHeader('X-RateLimit-Limit', result.capacity.toString());
       res.setHeader('X-RateLimit-Remaining', result.remainingTokens.toString());
@@ -284,14 +290,16 @@ export class RateLimitController {
     }
   }
 
-  static processSlidingLogMemory(req: Request, res: Response) {
+  static async processSlidingLogMemory(req: Request, res: Response) {
     try {
       let clientId = req.headers['x-client-id'] as string;
+      let isRealClient = true;
       if (!clientId) {
         clientId = req.ip || 'unknown-client';
+        isRealClient = false;
       }
 
-      const result = InMemorySlidingLogRateLimiterService.processRequest(clientId);
+      const result = await InMemorySlidingLogRateLimiterService.processRequest(clientId, isRealClient);
 
       res.setHeader('X-RateLimit-Limit', result.limit.toString());
       res.setHeader('X-RateLimit-Remaining', result.remainingRequests.toString());
@@ -343,14 +351,16 @@ export class RateLimitController {
     }
   }
 
-  static processLeakyBucketMemory(req: Request, res: Response) {
+  static async processLeakyBucketMemory(req: Request, res: Response) {
     try {
       let clientId = req.headers['x-client-id'] as string;
+      let isRealClient = true;
       if (!clientId) {
         clientId = req.ip || 'unknown-client';
+        isRealClient = false;
       }
 
-      const result = InMemoryLeakyBucketRateLimiterService.processRequest(clientId);
+      const result = await InMemoryLeakyBucketRateLimiterService.processRequest(clientId, isRealClient);
 
       res.setHeader('X-RateLimit-Limit', result.capacity.toString());
       res.setHeader('X-RateLimit-Remaining', result.queueLength.toString());

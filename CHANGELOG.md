@@ -2,6 +2,19 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [1.0.0] - 2026-07-13
+### Added
+- Official v1.0.0 Release!
+- Dynamic Configuration Injection: Downloaded test scripts (Node, Python, Bash) now automatically detect and inject the user's specific database limits and algorithm wait-times into the load test templates.
+- Advanced Sandbox Targeting: Downloaded scripts correctly differentiate between Targeted scripts (using real API keys with custom limits) and Advanced Simulation scripts (falling back to the 10req/60s Sandbox limits).
+- Complete Memory Cache Invalidation: Real-time eviction of LRU cache variables for `InMemory` rate limiters across all 5 algorithms to guarantee instant synchronization with UI updates.
+
+### Fixed
+- Fixed strict algorithm validation logic: `InMemory` APIs now instantly reject requests (`HTTP 500 Algorithm Mismatch`) when accessed with mismatched API keys, preventing cross-algorithm limit pollution.
+- Re-architected API CORS routing: Removed overly strict global CORS blocks. Public `/api/v1/rate-limit/` endpoints are now fully open (`*`) to facilitate external application integration, while Dashboard APIs remain strictly guarded.
+- Resolved "Probe Leak" bug in `.ts` testing scripts where dynamic backend probes consumed tokens from the test capacity.
+- Updated all test scripts to gracefully halt and display readable warnings upon receiving 500 Algorithm Mismatch errors.
+
 ## [0.9.0] - 2026-07-10
 ### Added
 - Implemented Leaky Bucket rate limiting algorithm
@@ -26,7 +39,7 @@ All notable changes to LimitLab will be documented in this file.
 
 ## [0.8.0] - 2026-07-10
 ### Added
-- Implemented production-grade Sliding Log rate limiting algorithm
+- Implemented authentic Sliding Log rate limiting algorithm
 - Added PostgreSQL-backed Sliding Log implementation with persistent timestamp storage
 - Built high-performance in-memory Sliding Log implementation using bounded LRU cache
 - Implemented timestamp-based request tracking with automatic expiration of stale entries
@@ -40,15 +53,15 @@ All notable changes to LimitLab will be documented in this file.
 - Implemented standard HTTP rate-limiting headers including Retry-After and X-RateLimit-Reset
 - Created comprehensive TypeScript load-testing suite covering burst traffic, expiration behavior, and sliding window validation
 - Added downloadable JavaScript load-testing script for external developer testing
-- Implemented backend validation, production-grade error handling, and consistent response formatting
+- Implemented backend validation, robust error handling, and consistent response formatting
 - Added comprehensive documentation explaining Sliding Log architecture, advantages, disadvantages, complexity, and real-world use cases
 - Compared Sliding Log against Token Bucket, Fixed Window, and Sliding Window Counter within project documentation
 - Preserved compatibility with all existing algorithms, Playground, Simulation, client management, and testing infrastructure
-- Verified mathematical correctness, timestamp expiration, concurrency safety, and production behavior through comprehensive automated load testing
+- Verified mathematical correctness, timestamp expiration, concurrency safety, and expected behavior through comprehensive automated load testing
 
 ## [0.7.0] - 2026-07-09
 ### Added
-- Implemented a complete, production-grade PostgreSQL-backed Sliding Window Counter algorithm.
+- Implemented a complete, authentic PostgreSQL-backed Sliding Window Counter algorithm.
 - Designed `SlidingWindowState` Prisma schema extensions to safely track `currentWindow`, `requestCount`, `previousWindow`, and `previousCount`.
 - Engineered real-time window overlap mathematics (`elapsed / windowDurationMs`) to smoothly blend previous and current request weights.
 - Added a dedicated high-performance in-memory Sliding Window algorithm endpoint for load testing.
@@ -75,7 +88,7 @@ All notable changes to LimitLab will be documented in this file.
 
 ## [0.5.0] - 2026-07-03
 ### Added
-- Designed and implemented a production-grade PostgreSQL-backed Fixed Window rate limiter
+- Designed and implemented an authentic PostgreSQL-backed Fixed Window rate limiter
 - Created robust `windowState` Prisma schema extensions to track `currentWindow`, `requestCount`, and `resetTime`
 - Applied Optimistic Concurrency Control (OCC) via atomic SQL updates to ensure strict concurrency safety for Fixed Window states
 - Engineered robust state-recalculation retry loops to completely prevent request count over-increments during race conditions

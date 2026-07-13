@@ -1,5 +1,6 @@
 import { processTokenBucket } from '../algorithms/tokenBucket';
 import { RequestDecision } from '@prisma/client';
+import { prisma } from '../database/prisma';
 
 interface BucketState {
   capacity: number;
@@ -11,6 +12,7 @@ interface BucketState {
 
 export class InMemoryRateLimiterService {
   private static buckets = new Map<string, BucketState>();
+  private static loadingPromises = new Map<string, Promise<void>>();
   private static cleanupInterval: NodeJS.Timeout | null = null;
   private static readonly BUCKET_EXPIRY_MS = 30 * 60 * 1000;
   private static readonly MAX_BUCKETS = 100000;
@@ -18,7 +20,7 @@ export class InMemoryRateLimiterService {
   private static readonly DEFAULT_CAPACITY = 10;
   private static readonly DEFAULT_REFILL_RATE = 1;
 
-  static processRequest(clientId: string) {
+  static async processRequest(clientId: string, isRealClient: boolean = false) {
     const startTime = Date.now();
     const arrivalTime = new Date();
 
@@ -28,20 +30,52 @@ export class InMemoryRateLimiterService {
       this.buckets.delete(clientId);
       this.buckets.set(clientId, state);
     } else {
-      if (this.buckets.size >= this.MAX_BUCKETS) {
-        const oldestKey = this.buckets.keys().next().value;
-        if (oldestKey) this.buckets.delete(oldestKey);
-      }
+      let loadingPromise = this.loadingPromises.get(clientId);
+      if (!loadingPromise) {
+        loadingPromise = (async () => {
+          let capacity = this.DEFAULT_CAPACITY;
+          let refillRate = this.DEFAULT_REFILL_RATE;
 
-      state = {
-        capacity: this.DEFAULT_CAPACITY,
-        remainingTokens: this.DEFAULT_CAPACITY,
-        refillRate: this.DEFAULT_REFILL_RATE,
-        lastRefillTime: arrivalTime,
-        lastAccessTime: arrivalTime,
-      };
-      this.buckets.set(clientId, state);
-      this.startCleanupTask();
+          if (isRealClient) {
+            try {
+              const dbClient = await prisma.client.findUnique({
+                where: { apiKey: clientId },
+                include: { configuration: true }
+              });
+              if (dbClient?.configuration) {
+                if (dbClient.configuration.algorithm !== 'TOKEN_BUCKET') {
+                  throw new Error(`Algorithm mismatch: expected TOKEN_BUCKET but got ${dbClient.configuration.algorithm}`);
+                }
+                capacity = dbClient.configuration.burstSize ?? dbClient.configuration.requestsPerSecond ?? capacity;
+                refillRate = dbClient.configuration.refillRate ?? refillRate;
+              }
+            } catch (error) {
+              console.error(`Failed to fetch config for client ${clientId}:`, error);
+              throw error;
+            }
+          }
+
+          if (this.buckets.size >= this.MAX_BUCKETS) {
+            const oldestKey = this.buckets.keys().next().value;
+            if (oldestKey) this.buckets.delete(oldestKey);
+          }
+
+          const newState: BucketState = {
+            capacity,
+            remainingTokens: capacity,
+            refillRate,
+            lastRefillTime: new Date(),
+            lastAccessTime: new Date(),
+          };
+          this.buckets.set(clientId, newState);
+          this.startCleanupTask();
+        })();
+        this.loadingPromises.set(clientId, loadingPromise);
+      }
+      
+      await loadingPromise;
+      this.loadingPromises.delete(clientId);
+      state = this.buckets.get(clientId)!;
     }
 
     const { decision, remainingTokens, lastRefillTime, retryAfterSeconds, resetTimestamp } = processTokenBucket({
@@ -59,13 +93,14 @@ export class InMemoryRateLimiterService {
     
     state.lastAccessTime = arrivalTime;
 
-    return this.formatResponse(decision, remainingTokens, state.capacity, startTime, retryAfterSeconds, resetTimestamp);
+    return this.formatResponse(decision, remainingTokens, state.capacity, state.refillRate, startTime, retryAfterSeconds, resetTimestamp);
   }
 
   private static formatResponse(
     decision: RequestDecision, 
     remainingTokens: number, 
     capacity: number, 
+    refillRate: number,
     startTime: number,
     retryAfterSeconds?: number,
     resetTimestamp?: number
@@ -74,11 +109,16 @@ export class InMemoryRateLimiterService {
       decision,
       remainingTokens: Math.round(remainingTokens * 100) / 100,
       capacity,
+      refillRate,
       latencyMs: Date.now() - startTime,
       timestamp: new Date(),
       ...(retryAfterSeconds !== undefined && { retryAfterSeconds }),
       ...(resetTimestamp !== undefined && { resetTimestamp })
     };
+  }
+
+  static clearClient(clientId: string) {
+    this.buckets.delete(clientId);
   }
 
   private static startCleanupTask() {

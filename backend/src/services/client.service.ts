@@ -1,5 +1,10 @@
 import { prisma } from '../database/prisma';
 import { RateLimitAlgorithm } from '@prisma/client';
+import { InMemoryRateLimiterService } from './inMemoryRateLimiter.service';
+import { InMemoryFixedWindowRateLimiterService } from './inMemoryFixedWindowRateLimiter.service';
+import { InMemorySlidingWindowRateLimiterService } from './inMemorySlidingWindowRateLimiter.service';
+import { InMemorySlidingLogRateLimiterService } from './inMemorySlidingLogRateLimiter.service';
+import { InMemoryLeakyBucketRateLimiterService } from './inMemoryLeakyBucketRateLimiter.service';
 import { randomBytes } from 'crypto';
 
 export class ClientService {
@@ -183,7 +188,7 @@ export class ClientService {
     requestLimit?: number;
     isActive?: boolean;
   }) {
-    return prisma.$transaction(async (tx) => {
+    const updatedClient = await prisma.$transaction(async (tx) => {
       if (data.name !== undefined || data.description !== undefined || data.isActive !== undefined) {
         await tx.client.update({
           where: { id },
@@ -261,6 +266,16 @@ export class ClientService {
         include: { configuration: true, bucketState: true, windowState: true, slidingWindowState: true, leakyBucketState: true }
       });
     });
+
+    if (updatedClient) {
+      InMemoryRateLimiterService.clearClient(updatedClient.apiKey);
+      InMemoryFixedWindowRateLimiterService.clearClient(updatedClient.apiKey);
+      InMemorySlidingWindowRateLimiterService.clearClient(updatedClient.apiKey);
+      InMemorySlidingLogRateLimiterService.clearClient(updatedClient.apiKey);
+      InMemoryLeakyBucketRateLimiterService.clearClient(updatedClient.apiKey);
+    }
+
+    return updatedClient;
   }
 
   static async deleteClient(id: string) {

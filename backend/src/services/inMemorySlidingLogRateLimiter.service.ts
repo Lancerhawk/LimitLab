@@ -1,5 +1,6 @@
 import { processSlidingLog } from '../algorithms/slidingLog';
 import { RequestDecision } from '@prisma/client';
+import { prisma } from '../database/prisma';
 
 interface SlidingLogState {
   windowDurationMs: number;
@@ -10,6 +11,7 @@ interface SlidingLogState {
 
 export class InMemorySlidingLogRateLimiterService {
   private static logs = new Map<string, SlidingLogState>();
+  private static loadingPromises = new Map<string, Promise<void>>();
   private static cleanupInterval: NodeJS.Timeout | null = null;
   private static readonly LOG_EXPIRY_MS = 30 * 60 * 1000;
   private static readonly MAX_LOGS = 100000;
@@ -17,7 +19,7 @@ export class InMemorySlidingLogRateLimiterService {
   private static readonly DEFAULT_WINDOW_DURATION_MS = 60000;
   private static readonly DEFAULT_REQUEST_LIMIT = 10;
 
-  static processRequest(clientId: string) {
+  static async processRequest(clientId: string, isRealClient: boolean = false) {
     const startTime = Date.now();
     const arrivalTime = new Date();
     const nowMs = arrivalTime.getTime();
@@ -28,19 +30,51 @@ export class InMemorySlidingLogRateLimiterService {
       this.logs.delete(clientId);
       this.logs.set(clientId, state);
     } else {
-      if (this.logs.size >= this.MAX_LOGS) {
-        const oldestKey = this.logs.keys().next().value;
-        if (oldestKey) this.logs.delete(oldestKey);
+      let loadingPromise = this.loadingPromises.get(clientId);
+      if (!loadingPromise) {
+        loadingPromise = (async () => {
+          let requestLimit = this.DEFAULT_REQUEST_LIMIT;
+          let windowDurationMs = this.DEFAULT_WINDOW_DURATION_MS;
+
+          if (isRealClient) {
+            try {
+              const dbClient = await prisma.client.findUnique({
+                where: { apiKey: clientId },
+                include: { configuration: true }
+              });
+              if (dbClient?.configuration) {
+                if (dbClient.configuration.algorithm !== 'SLIDING_LOG') {
+                  throw new Error(`Algorithm mismatch: expected SLIDING_LOG but got ${dbClient.configuration.algorithm}`);
+                }
+                requestLimit = dbClient.configuration.requestsPerSecond ?? requestLimit;
+                windowDurationMs = dbClient.configuration.windowDurationMs ?? windowDurationMs;
+              }
+            } catch (error) {
+              console.error(`Failed to fetch config for client ${clientId}:`, error);
+              throw error;
+            }
+          }
+
+          if (this.logs.size >= this.MAX_LOGS) {
+            const oldestKey = this.logs.keys().next().value;
+            if (oldestKey) this.logs.delete(oldestKey);
+          }
+
+          const newState: SlidingLogState = {
+            windowDurationMs,
+            requestLimit,
+            timestamps: [],
+            lastAccessTime: new Date(),
+          };
+          this.logs.set(clientId, newState);
+          this.startCleanupTask();
+        })();
+        this.loadingPromises.set(clientId, loadingPromise);
       }
 
-      state = {
-        windowDurationMs: this.DEFAULT_WINDOW_DURATION_MS,
-        requestLimit: this.DEFAULT_REQUEST_LIMIT,
-        timestamps: [],
-        lastAccessTime: arrivalTime,
-      };
-      this.logs.set(clientId, state);
-      this.startCleanupTask();
+      await loadingPromise;
+      this.loadingPromises.delete(clientId);
+      state = this.logs.get(clientId)!;
     }
 
     let expiredCount = 0;
@@ -74,6 +108,7 @@ export class InMemorySlidingLogRateLimiterService {
       decision: result.decision,
       remainingRequests,
       limit: state.requestLimit,
+      windowMs: state.windowDurationMs,
       retryAfter: result.retryAfterSeconds,
       resetTimestamp: result.resetTimestamp,
       latency: Date.now() - startTime,
@@ -91,6 +126,10 @@ export class InMemorySlidingLogRateLimiterService {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+  }
+
+  static clearClient(clientId: string) {
+    this.logs.delete(clientId);
   }
 
   private static startCleanupTask() {

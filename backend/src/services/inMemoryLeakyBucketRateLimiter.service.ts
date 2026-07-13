@@ -1,5 +1,6 @@
 import { processLeakyBucket } from '../algorithms/leakyBucket';
 import { RequestDecision } from '@prisma/client';
+import { prisma } from '../database/prisma';
 
 interface LeakyBucketState {
   queueCapacity: number;
@@ -11,6 +12,7 @@ interface LeakyBucketState {
 
 export class InMemoryLeakyBucketRateLimiterService {
   private static buckets = new Map<string, LeakyBucketState>();
+  private static loadingPromises = new Map<string, Promise<void>>();
   private static cleanupInterval: NodeJS.Timeout | null = null;
   private static readonly BUCKET_EXPIRY_MS = 30 * 60 * 1000;
   private static readonly MAX_BUCKETS = 100000;
@@ -18,7 +20,7 @@ export class InMemoryLeakyBucketRateLimiterService {
   private static readonly DEFAULT_CAPACITY = 10;
   private static readonly DEFAULT_LEAK_RATE = 1;
 
-  static processRequest(clientId: string) {
+  static async processRequest(clientId: string, isRealClient: boolean = false) {
     const startTime = Date.now();
     const arrivalTime = new Date();
 
@@ -28,20 +30,52 @@ export class InMemoryLeakyBucketRateLimiterService {
       this.buckets.delete(clientId);
       this.buckets.set(clientId, state);
     } else {
-      if (this.buckets.size >= this.MAX_BUCKETS) {
-        const oldestKey = this.buckets.keys().next().value;
-        if (oldestKey) this.buckets.delete(oldestKey);
-      }
+      let loadingPromise = this.loadingPromises.get(clientId);
+      if (!loadingPromise) {
+        loadingPromise = (async () => {
+          let queueCapacity = this.DEFAULT_CAPACITY;
+          let leakRate = this.DEFAULT_LEAK_RATE;
 
-      state = {
-        queueCapacity: this.DEFAULT_CAPACITY,
-        queueLength: 0,
-        leakRate: this.DEFAULT_LEAK_RATE,
-        lastLeakTime: arrivalTime,
-        lastAccessTime: arrivalTime,
-      };
-      this.buckets.set(clientId, state);
-      this.startCleanupTask();
+          if (isRealClient) {
+            try {
+              const dbClient = await prisma.client.findUnique({
+                where: { apiKey: clientId },
+                include: { configuration: true }
+              });
+              if (dbClient?.configuration) {
+                if (dbClient.configuration.algorithm !== 'LEAKY_BUCKET') {
+                  throw new Error(`Algorithm mismatch: expected LEAKY_BUCKET but got ${dbClient.configuration.algorithm}`);
+                }
+                queueCapacity = dbClient.configuration.queueCapacity ?? dbClient.configuration.burstSize ?? queueCapacity;
+                leakRate = dbClient.configuration.leakRate ?? leakRate;
+              }
+            } catch (error) {
+              console.error(`Failed to fetch config for client ${clientId}:`, error);
+              throw error;
+            }
+          }
+
+          if (this.buckets.size >= this.MAX_BUCKETS) {
+            const oldestKey = this.buckets.keys().next().value;
+            if (oldestKey) this.buckets.delete(oldestKey);
+          }
+
+          const newState: LeakyBucketState = {
+            queueCapacity,
+            queueLength: 0,
+            leakRate,
+            lastLeakTime: new Date(),
+            lastAccessTime: new Date(),
+          };
+          this.buckets.set(clientId, newState);
+          this.startCleanupTask();
+        })();
+        this.loadingPromises.set(clientId, loadingPromise);
+      }
+      
+      await loadingPromise;
+      this.loadingPromises.delete(clientId);
+      state = this.buckets.get(clientId)!;
     }
 
     const { decision, queueLength, lastLeakTime, retryAfterSeconds, resetTimestamp } = processLeakyBucket({
@@ -89,6 +123,10 @@ export class InMemoryLeakyBucketRateLimiterService {
       ...(retryAfterSeconds !== undefined && { retryAfterSeconds }),
       ...(resetTimestamp !== undefined && { resetTimestamp })
     };
+  }
+
+  static clearClient(clientId: string) {
+    this.buckets.delete(clientId);
   }
 
   private static startCleanupTask() {

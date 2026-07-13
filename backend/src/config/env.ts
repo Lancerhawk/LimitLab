@@ -10,6 +10,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   ENABLE_RATE_LIMIT_TIMING: z.string().default('false').transform(v => v === 'true'),
   MAX_OCC_ATTEMPTS: z.coerce.number().default(20),
+  ADMIN_KEY: z.string().default('secret-admin-key'),
 });
 
 const _env = envSchema.safeParse(process.env);

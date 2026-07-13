@@ -29,29 +29,42 @@ async function runSequential(count, delayMs) {
   return results;
 }
 
-function printResults(name, results) {
+function printResults(name, results, expectedAllowed) {
   console.log(`\n--- ${name} ---`);
   const allowed = results.filter(r => r.decision === 'ALLOW').length;
   const denied = results.filter(r => r.decision === 'DENY').length;
-  console.log(`Allowed: ${allowed}, Denied: ${denied}`);
+  const expectedDenied = results.length - expectedAllowed;
+  const pass = allowed === expectedAllowed && denied === expectedDenied;
+  console.log(`Allowed: ${allowed} (Expected: ${expectedAllowed})`);
+  console.log(`Denied:  ${denied} (Expected: ${expectedDenied})`);
+  console.log(`Status:  ${pass ? 'PASS ✅' : 'FAIL ❌'}`);
+  return pass;
 }
 
 async function run() {
   console.log(`Starting tests against ${ENDPOINT}...\n`);
+  const results = [];
 
-  printResults("TEST 1: 10 Simultaneous", await runSimultaneous(10));
+  results.push(printResults("TEST 1: 10 Simultaneous", await runSimultaneous(10), 10));
   console.log("Waiting 15s for queue to drain...");
   await new Promise(r => setTimeout(r, 15000));
 
-  printResults("TEST 2: 11 Simultaneous", await runSimultaneous(11));
+  results.push(printResults("TEST 2: 11 Simultaneous", await runSimultaneous(11), 10));
   console.log("Waiting 15s for queue to drain...");
   await new Promise(r => setTimeout(r, 15000));
 
-  printResults("TEST 3: 20 Simultaneous", await runSimultaneous(20));
+  results.push(printResults("TEST 3: 20 Simultaneous", await runSimultaneous(20), 10));
   console.log("Waiting 15s for queue to drain...");
   await new Promise(r => setTimeout(r, 15000));
 
-  printResults("TEST 4: 15 Sequential (100ms delay)", await runSequential(15, 100));
+  results.push(printResults("TEST 4: 15 Sequential (100ms delay)", await runSequential(15, 100), 10));
+
+  console.log('\n======================================');
+  if (results.every(r => r)) {
+    console.log('🎉 ALL TESTS PASSED SUCCESSFULLY 🎉');
+  } else {
+    console.log('💥 SOME TESTS FAILED 💥');
+  }
 }
 
 run();
