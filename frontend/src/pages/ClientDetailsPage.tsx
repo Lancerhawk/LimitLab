@@ -511,7 +511,7 @@ fi
                 ...prev,
                 windowState: {
                   ...prev.windowState,
-                  requestCount: limit - response.remainingTokens,
+                  requestCount: limit - (response.remainingTokens ?? 0),
                   currentWindow: currentWindow.toString(),
                   resetTime: response.resetTimestamp ? new Date(response.resetTimestamp * 1000).toISOString() : calculatedResetTime
                 }
@@ -576,7 +576,7 @@ fi
               ...prev,
               bucketState: {
                 ...prev.bucketState,
-                remainingTokens: response.remainingTokens,
+                remainingTokens: response.remainingTokens ?? 0,
                 currentCapacity: response.capacity,
                 lastRefillTime: new Date().toISOString()
               }
@@ -589,7 +589,7 @@ fi
             timestamp: new Date(),
             decision: 'DENY',
             remainingTokens: 0,
-            status: error.response?.status || 500
+            status: (error as any).response?.status || 500
           };
 
           setLogs(prev => {
