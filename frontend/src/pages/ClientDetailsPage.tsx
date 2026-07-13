@@ -577,19 +577,20 @@ fi
               bucketState: {
                 ...prev.bucketState,
                 remainingTokens: response.remainingTokens ?? 0,
-                currentCapacity: response.capacity,
+                currentCapacity: response.capacity ?? 0,
                 lastRefillTime: new Date().toISOString()
               }
             };
           });
 
         } catch (error) {
+          const err = error as { response?: { status?: number } };
           const logEntry: RequestLog = {
             id: Math.random().toString(36).substring(7),
             timestamp: new Date(),
             decision: 'DENY',
             remainingTokens: 0,
-            status: (error as any).response?.status || 500
+            status: err.response?.status || 500
           };
 
           setLogs(prev => {
