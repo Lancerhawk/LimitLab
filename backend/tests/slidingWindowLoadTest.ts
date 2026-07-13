@@ -4,7 +4,6 @@ import * as path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-declare var process: any;
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001';
 const ENDPOINT = `${API_BASE_URL}/api/v1/rate-limit/sliding-window/memory`;
@@ -35,7 +34,7 @@ async function runSimultaneous(count: number) {
   return Promise.all(promises);
 }
 
-function printResults(name: string, results: any[], expectedAllow: number | number[], expectedDeny: number | number[]) {
+function printResults(name: string, results: { decision: string }[], expectedAllow: number | number[], expectedDeny: number | number[]) {
   const allowed = results.filter((r) => r.decision === 'ALLOW').length;
   const denied = results.filter((r) => r.decision === 'DENY').length;
 
@@ -102,6 +101,7 @@ async function runTests() {
   await runSimultaneous(LIMIT);
   console.log(`Exhausted current window. Waiting for EXACTLY halfway into the next window...`);
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const elapsed = Date.now() % WINDOW_DURATION_MS;
     // We must cross into a new window, AND reach exactly halfway into it

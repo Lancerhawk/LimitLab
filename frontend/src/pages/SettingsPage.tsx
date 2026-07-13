@@ -10,16 +10,16 @@ const SettingsPage = () => {
 
   useEffect(() => {
     const savedKey = localStorage.getItem('adminKey');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (savedKey) setAdminKey(savedKey);
   }, []);
 
   const handleSave = async () => {
     if (!adminKey.trim()) return;
-    
+
     setIsSaving(true);
-    // Simulate a brief network request for better UX
     await new Promise(resolve => setTimeout(resolve, 600));
-    
+
     localStorage.setItem('adminKey', adminKey.trim());
     toast.success('Developer Mode Enabled');
     setIsSaving(false);
@@ -28,7 +28,7 @@ const SettingsPage = () => {
   const handleDisable = async () => {
     setIsSaving(true);
     await new Promise(resolve => setTimeout(resolve, 400));
-    
+
     localStorage.removeItem('adminKey');
     setAdminKey('');
     toast.success('Developer Mode Disabled');
@@ -74,8 +74,8 @@ const SettingsPage = () => {
                     onChange={(e) => setAdminKey(e.target.value)}
                     className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
                   />
-                  <Button 
-                    onClick={handleSave} 
+                  <Button
+                    onClick={handleSave}
                     className="flex items-center gap-2"
                     isLoading={isSaving}
                     disabled={!adminKey.trim()}
@@ -83,9 +83,9 @@ const SettingsPage = () => {
                     <Save className="w-4 h-4" />
                     Save Settings
                   </Button>
-                  <Button 
+                  <Button
                     variant="destructive"
-                    onClick={handleDisable} 
+                    onClick={handleDisable}
                     isLoading={isSaving}
                     disabled={!adminKey.trim() && !localStorage.getItem('adminKey')}
                   >

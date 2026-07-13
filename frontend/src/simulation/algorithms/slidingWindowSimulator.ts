@@ -71,7 +71,7 @@ export function getSlidingWindowInfo(
   const storedWindow = Math.floor(state.currentWindowStartMs / config.windowDurationMs);
   const isNewWindow = currentWindow !== storedWindow;
 
-  let curCount = isNewWindow ? 0 : state.currentWindowCount;
+  const curCount = isNewWindow ? 0 : state.currentWindowCount;
   let prevCount: number;
 
   if (isNewWindow) {

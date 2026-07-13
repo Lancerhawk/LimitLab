@@ -4,7 +4,6 @@ import * as path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-declare var process: any;
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001';
 const ENDPOINT = `${API_BASE_URL}/api/v1/rate-limit/memory`;
@@ -44,7 +43,7 @@ async function runSequential(count: number, delayMs: number) {
   return results;
 }
 
-function printResults(name: string, results: any[], expectedAllow: number, expectedDeny: number) {
+function printResults(name: string, results: { decision: string }[], expectedAllow: number, expectedDeny: number) {
   const allowed = results.filter((r) => r.decision === 'ALLOW').length;
   const denied = results.filter((r) => r.decision === 'DENY').length;
   const passed = allowed === expectedAllow && denied === expectedDeny;

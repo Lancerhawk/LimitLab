@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 import { logger } from './config/logger';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
@@ -29,21 +30,7 @@ app.use(
   })
 );
 
-const io = new Server(httpServer, {
-  cors: {
-    origin: env.CORS_ORIGIN,
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-});
 
-io.on('connection', (socket) => {
-  logger.info(`Socket connected: ${socket.id}`);
-
-  socket.on('disconnect', () => {
-    logger.info(`Socket disconnected: ${socket.id}`);
-  });
-});
 
 import clientRoutes from './routes/client.routes';
 import rateLimitRoutes from './routes/rateLimit.routes';

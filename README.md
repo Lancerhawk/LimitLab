@@ -10,20 +10,20 @@
 
 A high-performance, real-time sandbox and playground for visualizing and load-testing 5 fully-functional rate-limiting algorithms.
 
-## 📖 Overview
+## Overview
 LimitLab is an interactive, highly visual platform designed to demystify API Rate Limiting. It allows engineers to configure, simulate, visualize, and compare five distinct rate-limiting algorithms in real-time. Whether you want to test how a **Token Bucket** responds to burst traffic, visualize how a **Leaky Bucket** queues excess requests, or download localized load-testing scripts for your own applications, LimitLab provides a zero-latency playground backed by both **In-Memory** (LRU cache) and **PostgreSQL** architectures.
 
-## ✨ Features
-- ⚡ **Zero-Latency Sandbox:** Test rate limits instantly with in-memory LRU caches that dynamically sync with your configurations.
-- 🛠️ **Algorithm Playground:** Deep-dive into 5 distinct rate-limiting strategies with real-time UI synchronization.
-- 📊 **Visual Simulation Engine:** A deterministic React simulation engine allowing users to visually model behavior using timelines, request graphs, and comparison modes.
-- 📦 **Dynamic Script Generation:** Download auto-generated load-testing scripts (Node.js, Python, Bash) that securely embed your custom DB configurations and timing constraints.
-- 🛡️ **Robust Architecture:** PostgreSQL-backed implementations featuring Optimistic Concurrency Control (OCC) and precision timestamping.
-- 🌐 **Open Public API:** Fully open CORS endpoints designed explicitly for external benchmarking and simulated DDOS traffic testing.
+## Features
+- **Zero-Latency Sandbox:** Test rate limits instantly with in-memory LRU caches that dynamically sync with your configurations.
+- **Algorithm Playground:** Deep-dive into 5 distinct rate-limiting strategies with real-time UI synchronization.
+- **Visual Simulation Engine:** A deterministic React simulation engine allowing users to visually model behavior using timelines, request graphs, and comparison modes.
+- **Dynamic Script Generation:** Download auto-generated load-testing scripts (Node.js, Python, Bash) that securely embed your custom DB configurations and timing constraints.
+- **Robust Architecture:** PostgreSQL-backed implementations featuring Optimistic Concurrency Control (OCC) and precision timestamping.
+- **Open Public API:** Fully open CORS endpoints designed explicitly for external benchmarking and simulated DDOS traffic testing.
 
 ---
 
-## 🧠 Algorithms Explained
+## Algorithms Explained
 
 ### 1. Token Bucket
 A steady stream of tokens is added to a bucket. Requests consume tokens. If the bucket is empty, the request is denied. Ideal for APIs that need a steady baseline but want to allow brief bursts of traffic.
@@ -55,7 +55,7 @@ A hybrid approach that tracks the current fixed window and the previous fixed wi
 
 ```mermaid
 flowchart LR
-    Start([Incoming Request]) --> Calc[Calculate Weighted Count:<br>Prev_Count * (1 - % time_passed) + Curr_Count]
+    Start([Incoming Request]) --> Calc["Calculate Weighted Count:<br>Prev_Count * (1 - % time_passed) + Curr_Count"]
     Calc --> Check{Is Weighted Count<br>< Limit?}
     Check -->|Yes| Increment[Increment Curr_Count] --> Allow([ALLOW])
     Check -->|No| Deny([DENY])
@@ -86,7 +86,7 @@ flowchart LR
 
 ---
 
-## 🏗️ System Architecture & Data Flow
+## System Architecture & Data Flow
 
 ```mermaid
 flowchart LR
@@ -114,7 +114,7 @@ flowchart LR
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 ```mermaid
 erDiagram
@@ -228,7 +228,7 @@ erDiagram
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 LimitLab/
@@ -293,7 +293,7 @@ LimitLab/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js (v18+)
@@ -314,4 +314,4 @@ LimitLab/
 4. `npm run dev`
 
 ---
-*Built with ❤️ for API Engineers & Architects...a small project of mine : ).*
+*Built for API Engineers & Architects.*

@@ -27,6 +27,7 @@ const ALGO_COLORS: Record<AlgorithmType, string> = {
   LEAKY_BUCKET: 'border-orange-500/40',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AlgorithmConfiguration = ({ config, updateConfig, disabled }: { config: any, updateConfig: any, disabled: boolean }) => {
   if (config.algorithm === 'TOKEN_BUCKET') {
     return (
@@ -70,6 +71,7 @@ const AlgorithmConfiguration = ({ config, updateConfig, disabled }: { config: an
   );
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AlgoVisualizer = ({ config, state }: { config: any; state: any }) => {
   if (config.algorithm === 'SLIDING_WINDOW' || config.algorithm === 'SLIDING_LOG') {
     return <SlidingWindowVisualizer config={config} state={state} />;
@@ -100,6 +102,7 @@ export const SimulatorPage = () => {
     if (comparisonMode) {
       sim2.updateConfig({ algorithm: algo2 });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode, algo2]);
 
   // When entering comparison mode, reset both sims and sync playback speed to 1x
@@ -110,6 +113,7 @@ export const SimulatorPage = () => {
       sim1.reset();
       sim2.reset();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode]);
 
   // Sync traffic from sim1 to sim2 whenever comparison is activated or sim1 traffic changes
@@ -118,6 +122,7 @@ export const SimulatorPage = () => {
     if (comparisonMode && !sim1.state.isRunning && !sim1.state.isPaused && !sim1.state.isComplete) {
       sim2.setTraffic(sim1.traffic);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode, sim1.traffic, sim1.state.isRunning, sim1.state.isPaused, sim1.state.isComplete]);
 
   // Sync duration
@@ -125,6 +130,7 @@ export const SimulatorPage = () => {
     if (comparisonMode && sim1.config.durationMs !== sim2.config.durationMs) {
       sim2.updateConfig({ durationMs: sim1.config.durationMs });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode, sim1.config.durationMs]);
 
   const handleStart = () => {

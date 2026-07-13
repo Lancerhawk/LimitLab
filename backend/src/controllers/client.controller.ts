@@ -35,8 +35,9 @@ export class ClientController {
     try {
       const clients = await ClientService.getAllClients();
       res.json(clients);
-    } catch (error: any) {
-      res.status(500).json({ error: 'Failed to retrieve clients', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to retrieve clients', details: errorMessage });
     }
   }
 
@@ -47,8 +48,9 @@ export class ClientController {
         return res.status(404).json({ error: 'Client not found' });
       }
       res.json(client);
-    } catch (error: any) {
-      res.status(500).json({ error: 'Failed to retrieve client', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to retrieve client', details: errorMessage });
     }
   }
 
@@ -57,11 +59,12 @@ export class ClientController {
       const validatedData = CreateClientSchema.parse(req.body);
       const client = await ClientService.createClient(validatedData);
       res.status(201).json(client);
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
       }
-      res.status(500).json({ error: 'Failed to create client', details: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to create client', details: errorMessage });
     }
   }
 
@@ -73,11 +76,12 @@ export class ClientController {
         return res.status(404).json({ error: 'Client not found' });
       }
       res.json(client);
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
       }
-      res.status(500).json({ error: 'Failed to update client', details: error.message });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to update client', details: errorMessage });
     }
   }
 
@@ -85,8 +89,9 @@ export class ClientController {
     try {
       await ClientService.deleteClient(req.params.id);
       res.status(204).send();
-    } catch (error: any) {
-      res.status(500).json({ error: 'Failed to delete client', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to delete client', details: errorMessage });
     }
   }
 }

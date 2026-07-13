@@ -25,8 +25,9 @@ export class DashboardController {
         allowedRequests: allowedRequestsResult._sum.allowedRequests?.toString() || "0",
         deniedRequests: deniedRequestsResult._sum.deniedRequests?.toString() || "0",
       });
-    } catch (error: any) {
-      res.status(500).json({ error: 'Failed to retrieve dashboard stats', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to retrieve dashboard stats', details: errorMessage });
     }
   }
 }

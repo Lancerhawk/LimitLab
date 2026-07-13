@@ -141,6 +141,7 @@ export const SimulatorTimeline: React.FC<SimulatorTimelineProps> = ({
 
   useEffect(() => {
     if (!draggingId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalTraffic(traffic);
     }
   }, [traffic, draggingId]);
@@ -181,10 +182,10 @@ export const SimulatorTimeline: React.FC<SimulatorTimelineProps> = ({
 
   useEffect(() => {
     if (draggingId) {
-      window.addEventListener('mousemove', handleMouseMove as any);
+      window.addEventListener('mousemove', handleMouseMove as EventListener);
       window.addEventListener('mouseup', handleMouseUp);
       return () => {
-        window.removeEventListener('mousemove', handleMouseMove as any);
+        window.removeEventListener('mousemove', handleMouseMove as EventListener);
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }

@@ -1,5 +1,6 @@
 import type { SimulationConfig, TrafficEvent, LeakyBucketState } from '../types';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const getInitialLeakyBucketState = (_config: SimulationConfig): LeakyBucketState => {
   return {
     queueLength: 0,

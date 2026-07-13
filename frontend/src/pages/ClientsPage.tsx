@@ -43,6 +43,7 @@ const ClientsPage = () => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchClients();
     setIsAdmin(!!localStorage.getItem('adminKey'));
   }, []);
@@ -112,9 +113,10 @@ const ClientsPage = () => {
       resetForm();
       await fetchClients();
       toast.success('Client created successfully');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create client', error);
-      toast.error(error.response?.data?.message || 'Failed to create client');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to create client');
     } finally {
       setIsSubmitting(false);
     }
@@ -145,9 +147,10 @@ const ClientsPage = () => {
       resetForm();
       await fetchClients();
       toast.success('Client updated successfully');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to update client', error);
-      toast.error(error.response?.data?.message || 'Failed to update client');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to update client');
     } finally {
       setIsSubmitting(false);
     }
@@ -162,9 +165,10 @@ const ClientsPage = () => {
       resetForm();
       await fetchClients();
       toast.success('Client deleted successfully');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete client', error);
-      toast.error(error.response?.data?.message || 'Failed to delete client');
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Failed to delete client');
     } finally {
       setIsSubmitting(false);
     }

@@ -153,7 +153,7 @@ export class SlidingLogRateLimiterService {
   private static async updateStats(
     clientId: string,
     decision: RequestDecision,
-    latencyMs: number
+    _latencyMs: number
   ) {
     if (decision === RequestDecision.ALLOW) {
       await prisma.clientStatistics.updateMany({

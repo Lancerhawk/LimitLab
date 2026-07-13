@@ -69,6 +69,39 @@ export function useSimulation(initialConfig: SimulationConfig = DEFAULT_CONFIG) 
   const pendingSnapshotRef = useRef<SimulationSnapshot | null>(null);
   const rafUpdateRef = useRef<number | null>(null);
 
+  const flushUpdate = useCallback((engine: SimulationEngine, snapshot: SimulationSnapshot) => {
+    setFast({
+      timeMs: snapshot.timeMs,
+      tokens: snapshot.tokens,
+      totalAccepted: snapshot.totalAccepted,
+      totalRejected: snapshot.totalRejected,
+      requestCount: snapshot.requestCount,
+      windowStartMs: snapshot.windowStartMs,
+      isRunning: snapshot.isRunning,
+      isPaused: snapshot.isPaused,
+      isComplete: snapshot.isComplete,
+      slidingLogTimestamps: snapshot.slidingLogTimestamps,
+      queueLength: snapshot.queueLength,
+    });
+
+    const historyChanged = snapshot.historyVersion !== lastHistoryVersionRef.current;
+    const trafficChanged = snapshot.trafficVersion !== lastTrafficVersionRef.current;
+
+    if (historyChanged || trafficChanged || !snapshot.isRunning) {
+      lastHistoryVersionRef.current = snapshot.historyVersion;
+      lastTrafficVersionRef.current = snapshot.trafficVersion;
+
+      const history = [...engine.getState().history];
+      const traffic = engine.getTraffic();
+
+      setSlow({
+        history,
+        stats: computeStats(history, traffic),
+        traffic: [...traffic],
+      });
+    }
+  }, []);
+
   useEffect(() => {
     const engine = new SimulationEngine(config);
     engineRef.current = engine;
@@ -102,40 +135,9 @@ export function useSimulation(initialConfig: SimulationConfig = DEFAULT_CONFIG) 
         cancelAnimationFrame(rafUpdateRef.current);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function flushUpdate(engine: SimulationEngine, snapshot: SimulationSnapshot) {
-    setFast({
-      timeMs: snapshot.timeMs,
-      tokens: snapshot.tokens,
-      totalAccepted: snapshot.totalAccepted,
-      totalRejected: snapshot.totalRejected,
-      requestCount: snapshot.requestCount,
-      windowStartMs: snapshot.windowStartMs,
-      isRunning: snapshot.isRunning,
-      isPaused: snapshot.isPaused,
-      isComplete: snapshot.isComplete,
-      slidingLogTimestamps: snapshot.slidingLogTimestamps,
-      queueLength: snapshot.queueLength,
-    });
-
-    const historyChanged = snapshot.historyVersion !== lastHistoryVersionRef.current;
-    const trafficChanged = snapshot.trafficVersion !== lastTrafficVersionRef.current;
-
-    if (historyChanged || trafficChanged || !snapshot.isRunning) {
-      lastHistoryVersionRef.current = snapshot.historyVersion;
-      lastTrafficVersionRef.current = snapshot.trafficVersion;
-
-      const history = [...engine.getState().history];
-      const traffic = engine.getTraffic();
-
-      setSlow({
-        history,
-        stats: computeStats(history, traffic),
-        traffic: [...traffic],
-      });
-    }
-  }
 
   const updateConfig = useCallback((newConfig: Partial<SimulationConfig>) => {
     setConfig((prev) => {

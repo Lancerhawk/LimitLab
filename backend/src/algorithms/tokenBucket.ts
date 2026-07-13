@@ -24,7 +24,7 @@ export const processTokenBucket = (input: TokenBucketInput): TokenBucketOutput =
 
   const tokensToAdd = elapsedSeconds * refillRate;
 
-  let currentTokens = Math.min(capacity, remainingTokens + tokensToAdd);
+  const currentTokens = Math.min(capacity, remainingTokens + tokensToAdd);
 
   if (currentTokens >= 1) {
     return {

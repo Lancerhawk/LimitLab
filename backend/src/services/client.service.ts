@@ -245,8 +245,6 @@ export class ClientService {
             }
           });
 
-          if (config?.algorithm === RateLimitAlgorithm.SLIDING_LOG) {
-          }
         }
       } else if (config?.algorithm === RateLimitAlgorithm.LEAKY_BUCKET) {
         if (data.capacity !== undefined || data.refillRate !== undefined) {

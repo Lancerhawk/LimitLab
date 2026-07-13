@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-declare var process: any;
 
 const ENDPOINT = 'http://localhost:3001/api/v1/rate-limit/sliding-log/memory';
 const CLIENT_ID = 'test-client-' + Math.random().toString(36).substring(7);
@@ -30,7 +29,7 @@ async function runSimultaneous(count: number) {
   return Promise.all(promises);
 }
 
-function printResults(name: string, results: any[], expectedAllow: number, expectedDeny: number) {
+function printResults(name: string, results: { decision: string }[], expectedAllow: number, expectedDeny: number) {
   const allowed = results.filter((r) => r.decision === 'ALLOW').length;
   const denied = results.filter((r) => r.decision === 'DENY').length;
   const passed = allowed === expectedAllow && denied === expectedDeny;

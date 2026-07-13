@@ -45,14 +45,15 @@ export class RateLimitController {
       } else {
         res.status(429).json({ error: 'Too Many Requests', ...result });
       }
-    } catch (error: any) {
-      if (error.message === 'UNAUTHORIZED') {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage === 'UNAUTHORIZED') {
         return res.status(401).json({ error: 'Invalid API Key' });
       }
-      if (error.message === 'RATE_LIMITER_UNAVAILABLE') {
+      if (errorMessage === 'RATE_LIMITER_UNAVAILABLE') {
         return res.status(503).json({ error: 'Rate limiter temporarily unavailable. Please try again.' });
       }
-      res.status(500).json({ error: 'Rate limiter error', details: error.message });
+      res.status(500).json({ error: 'Rate limiter error', details: errorMessage });
     }
   }
   static async processMemory(req: Request, res: Response) {
@@ -81,8 +82,9 @@ export class RateLimitController {
       } else {
         res.status(200).json(result);
       }
-    } catch (error: any) {
-      res.status(500).json({ error: 'In-memory rate limiter error', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'In-memory rate limiter error', details: errorMessage });
     }
   }
 
@@ -127,14 +129,15 @@ export class RateLimitController {
         }
         res.status(429).json({ error: 'Too Many Requests', ...result });
       }
-    } catch (error: any) {
-      if (error.message === 'UNAUTHORIZED') {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage === 'UNAUTHORIZED') {
         return res.status(401).json({ error: 'Invalid API Key' });
       }
-      if (error.message === 'RATE_LIMITER_UNAVAILABLE') {
+      if (errorMessage === 'RATE_LIMITER_UNAVAILABLE') {
         return res.status(503).json({ error: 'Rate limiter temporarily unavailable. Please try again.' });
       }
-      res.status(500).json({ error: 'Fixed Window rate limiter error', details: error.message });
+      res.status(500).json({ error: 'Fixed Window rate limiter error', details: errorMessage });
     }
   }
 
@@ -164,8 +167,9 @@ export class RateLimitController {
       } else {
         res.status(200).json(result);
       }
-    } catch (error: any) {
-      res.status(500).json({ error: 'In-memory Fixed Window rate limiter error', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'In-memory Fixed Window rate limiter error', details: errorMessage });
     }
   }
 
@@ -210,14 +214,15 @@ export class RateLimitController {
         }
         res.status(429).json({ error: 'Too Many Requests', ...result });
       }
-    } catch (error: any) {
-      if (error.message === 'UNAUTHORIZED') {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage === 'UNAUTHORIZED') {
         return res.status(401).json({ error: 'Invalid API Key' });
       }
-      if (error.message === 'RATE_LIMITER_UNAVAILABLE') {
+      if (errorMessage === 'RATE_LIMITER_UNAVAILABLE') {
         return res.status(503).json({ error: 'Rate limiter temporarily unavailable. Please try again.' });
       }
-      res.status(500).json({ error: 'Sliding Window rate limiter error', details: error.message });
+      res.status(500).json({ error: 'Sliding Window rate limiter error', details: errorMessage });
     }
   }
 
@@ -247,8 +252,9 @@ export class RateLimitController {
       } else {
         res.status(200).json(result);
       }
-    } catch (error: any) {
-      res.status(500).json({ error: 'In-memory Sliding Window rate limiter error', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'In-memory Sliding Window rate limiter error', details: errorMessage });
     }
   }
 
@@ -279,14 +285,15 @@ export class RateLimitController {
         }
         res.status(429).json({ error: 'Too Many Requests', ...result });
       }
-    } catch (error: any) {
-      if (error.message === 'UNAUTHORIZED') {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage === 'UNAUTHORIZED') {
         return res.status(401).json({ error: 'Invalid API Key' });
       }
-      if (error.message === 'RATE_LIMITER_UNAVAILABLE') {
+      if (errorMessage === 'RATE_LIMITER_UNAVAILABLE') {
         return res.status(503).json({ error: 'Rate limiter temporarily unavailable. Please try again.' });
       }
-      res.status(500).json({ error: 'Sliding Log rate limiter error', details: error.message });
+      res.status(500).json({ error: 'Sliding Log rate limiter error', details: errorMessage });
     }
   }
 
@@ -316,8 +323,9 @@ export class RateLimitController {
       } else {
         res.status(200).json(result);
       }
-    } catch (error: any) {
-      res.status(500).json({ error: 'In-memory Sliding Log rate limiter error', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'In-memory Sliding Log rate limiter error', details: errorMessage });
     }
   }
   static async processLeakyBucket(req: Request, res: Response) {
@@ -340,14 +348,15 @@ export class RateLimitController {
       } else {
         res.status(429).json({ error: 'Too Many Requests', ...result });
       }
-    } catch (error: any) {
-      if (error.message === 'UNAUTHORIZED') {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage === 'UNAUTHORIZED') {
         return res.status(401).json({ error: 'Invalid API Key' });
       }
-      if (error.message === 'RATE_LIMITER_UNAVAILABLE') {
+      if (errorMessage === 'RATE_LIMITER_UNAVAILABLE') {
         return res.status(503).json({ error: 'Rate limiter temporarily unavailable. Please try again.' });
       }
-      res.status(500).json({ error: 'Leaky Bucket rate limiter error', details: error.message });
+      res.status(500).json({ error: 'Leaky Bucket rate limiter error', details: errorMessage });
     }
   }
 
@@ -370,8 +379,9 @@ export class RateLimitController {
       } else {
         res.status(200).json(result);
       }
-    } catch (error: any) {
-      res.status(500).json({ error: 'In-memory Leaky Bucket rate limiter error', details: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'In-memory Leaky Bucket rate limiter error', details: errorMessage });
     }
   }
 }
