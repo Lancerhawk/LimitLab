@@ -102,40 +102,35 @@ export const SimulatorPage = () => {
     if (comparisonMode) {
       sim2.updateConfig({ algorithm: algo2 });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode, algo2]);
 
-  // When entering comparison mode, reset both sims and sync playback speed to 1x
   useEffect(() => {
+    sim1.setPlaybackSpeed(1);
     if (comparisonMode) {
-      sim1.setPlaybackSpeed(1);
       sim2.setPlaybackSpeed(1);
       sim1.reset();
       sim2.reset();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comparisonMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comparisonMode, sim1.config.algorithm, algo2]);
 
-  // Sync traffic from sim1 to sim2 whenever comparison is activated or sim1 traffic changes
-  // Do not sync if sim1 just finished (isComplete = true), because setTraffic resets the engine state!
   useEffect(() => {
     if (comparisonMode && !sim1.state.isRunning && !sim1.state.isPaused && !sim1.state.isComplete) {
       sim2.setTraffic(sim1.traffic);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode, sim1.traffic, sim1.state.isRunning, sim1.state.isPaused, sim1.state.isComplete]);
 
-  // Sync duration
   useEffect(() => {
     if (comparisonMode && sim1.config.durationMs !== sim2.config.durationMs) {
       sim2.updateConfig({ durationMs: sim1.config.durationMs });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonMode, sim1.config.durationMs]);
 
   const handleStart = () => {
     if (comparisonMode) {
-      // Re-sync traffic right before starting so both sims have the exact same events
       sim2.setTraffic(sim1.traffic);
     }
     sim1.start();
@@ -294,9 +289,9 @@ export const SimulatorPage = () => {
                 currentTimeMs={sim2.state.timeMs}
                 traffic={sim2.traffic}
                 isRunning={sim2.state.isRunning}
-                onAddEvent={() => {}}
-                onRemoveEvent={() => {}}
-                onMoveEvent={() => {}}
+                onAddEvent={() => { }}
+                onRemoveEvent={() => { }}
+                onMoveEvent={() => { }}
               />
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">Edit Simulator A's timeline above to sync traffic to Simulator B.</p>

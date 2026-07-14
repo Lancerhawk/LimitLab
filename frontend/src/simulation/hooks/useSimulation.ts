@@ -209,6 +209,7 @@ export function useSimulation(initialConfig: SimulationConfig = DEFAULT_CONFIG) 
   const setPlaybackSpeed = useCallback((speed: number) => {
     if (engineRef.current) {
       engineRef.current.setPlaybackSpeed(speed);
+      setConfig(prev => ({ ...prev, playbackSpeed: speed }));
     }
   }, []);
 
