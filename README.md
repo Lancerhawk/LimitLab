@@ -1,32 +1,43 @@
-# LimitLab
-
-<p align="left">
-  <img src="https://img.shields.io/badge/version-1.0.0-green.svg" alt="Version 1.0.0" />
-  <img src="https://img.shields.io/badge/React-19.2-blue?logo=react" alt="React 19" />
-  <img src="https://img.shields.io/badge/Express.js-4.19-lightgray?logo=express" alt="Express" />
-  <img src="https://img.shields.io/badge/Prisma-6.0-2D3748?logo=prisma" alt="Prisma" />
-  <img src="https://img.shields.io/badge/TypeScript-Ready-3178C6?logo=typescript" alt="TypeScript" />
+<p align="center">
+  <img src="frontend/public/logo.png" alt="LimitLab Logo" width="120" />
 </p>
 
-A high-performance, real-time sandbox and playground for visualizing and load-testing 5 fully-functional rate-limiting algorithms.
+<h1 align="center">LimitLab</h1>
 
-## Overview
-LimitLab is an interactive, highly visual platform designed to demystify API Rate Limiting. It allows engineers to configure, simulate, visualize, and compare five distinct rate-limiting algorithms in real-time. Whether you want to test how a **Token Bucket** responds to burst traffic, visualize how a **Leaky Bucket** queues excess requests, or download localized load-testing scripts for your own applications, LimitLab provides a zero-latency playground backed by both **In-Memory** (LRU cache) and **PostgreSQL** architectures.
+<h4 align="center">An Interactive API Rate Limiting Sandbox</h4>
 
-## Features
-- **Zero-Latency Sandbox:** Test rate limits instantly with in-memory LRU caches that dynamically sync with your configurations.
-- **Algorithm Playground:** Deep-dive into 5 distinct rate-limiting strategies with real-time UI synchronization.
-- **Visual Simulation Engine:** A deterministic React simulation engine allowing users to visually model behavior using timelines, request graphs, and comparison modes.
-- **Dynamic Script Generation:** Download auto-generated load-testing scripts (Node.js, Python, Bash) that securely embed your custom DB configurations and timing constraints.
-- **Robust Architecture:** PostgreSQL-backed implementations featuring Optimistic Concurrency Control (OCC) and precision timestamping.
-- **Open Public API:** Fully open CORS endpoints designed explicitly for external benchmarking and simulated DDOS traffic testing.
+<p align="center">
+  <img src="https://img.shields.io/badge/FRONTEND-blueviolet?style=flat-square" alt="Frontend" />
+  <img src="https://img.shields.io/badge/V1.0.0-blue?style=flat-square" alt="V1.0.0" />
+  <img src="https://img.shields.io/badge/BACKEND-green?style=flat-square" alt="Backend" />
+  <img src="https://img.shields.io/badge/V1.0.0-brightgreen?style=flat-square" alt="V1.0.0" />
+  <img src="https://img.shields.io/badge/PRISMA%20%26%20POSTGRESQL-2D3748?style=flat-square&logo=prisma&logoColor=white" alt="Prisma & PostgreSQL" />
+  <img src="https://img.shields.io/badge/TYPESCRIPT-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+</p>
+
+<p align="center">
+  <em>A high-performance, real-time sandbox for visualizing, simulating, and load-testing five fully-functional rate-limiting algorithms with dual In-Memory and PostgreSQL backends.</em>
+</p>
 
 ---
 
-## Algorithms Explained
+## Core Capabilities
+
+| | |
+|---|---|
+| **Zero-Latency Sandbox** | Test rate limits instantly with in-memory LRU caches that dynamically sync with your configurations. No external dependencies needed to start experimenting. |
+| **Five Algorithm Playground** | Deep-dive into Token Bucket, Fixed Window, Sliding Window Counter, Sliding Log, and Leaky Bucket with real-time UI synchronization and per-client configurations. |
+| **Visual Simulation Engine** | A deterministic, pure client-side React simulation engine with drag-and-drop timelines, live request graphs, playback speed controls, and side-by-side comparison mode. |
+| **Dynamic Script Generation** | Download auto-generated load-testing scripts in Node.js, Python, and Bash that securely embed your custom DB configurations and timing constraints. |
+| **Dual Architecture** | Every algorithm ships with both an In-Memory (LRU cache) implementation and a PostgreSQL-backed implementation featuring Optimistic Concurrency Control. |
+| **Open Public API** | Fully open CORS sandbox endpoints designed explicitly for external benchmarking, with hard rate ceilings (500 req/s burst, 3000 req/15min sustained). |
+
+---
+
+## Algorithms
 
 ### 1. Token Bucket
-A steady stream of tokens is added to a bucket. Requests consume tokens. If the bucket is empty, the request is denied. Ideal for APIs that need a steady baseline but want to allow brief bursts of traffic.
+A steady stream of tokens is added to a bucket at a constant rate. Requests consume tokens. If the bucket is empty, the request is denied. Ideal for APIs that need a steady baseline but want to allow brief bursts of traffic.
 
 ```mermaid
 flowchart LR
@@ -38,7 +49,7 @@ flowchart LR
 ```
 
 ### 2. Fixed Window
-Time is divided into absolute intervals (e.g., 12:00:00 to 12:01:00). Requests are counted within that interval. Easy to implement but suffers from "edge spikes" where a user can send double their limit by spanning across a window boundary.
+Time is divided into absolute intervals. Requests are counted within that interval. Easy to implement but suffers from edge spikes where a user can send double their limit by spanning across a window boundary.
 
 ```mermaid
 flowchart TD
@@ -74,7 +85,7 @@ flowchart TD
 ```
 
 ### 5. Leaky Bucket
-Incoming requests are placed into a queue. The queue "leaks" (processes requests) at a strictly constant rate. If the queue is full, new requests are dropped. Ideal for strict traffic shaping and protecting downstream services from sudden load spikes.
+Incoming requests are placed into a queue. The queue leaks (processes requests) at a strictly constant rate. If the queue is full, new requests are dropped. Ideal for strict traffic shaping and protecting downstream services from sudden load spikes.
 
 ```mermaid
 flowchart LR
@@ -86,7 +97,7 @@ flowchart LR
 
 ---
 
-## System Architecture & Data Flow
+## System Architecture
 
 ```mermaid
 flowchart LR
@@ -240,55 +251,38 @@ LimitLab/
 │   │   ├── pages/              # Main routing views
 │   │   │   ├── ClientDetailsPage.tsx  # Interactive sandbox, script generation, real-time UI sync
 │   │   │   ├── DashboardPage.tsx      # Global statistics overview
-│   │   │   └── SimulationPage.tsx     # Visual drag-and-drop deterministic simulation
+│   │   │   └── SimulatorPage.tsx      # Visual drag-and-drop deterministic simulation
+│   │   ├── simulation/         # Pure client-side simulation engine
+│   │   │   ├── simulationEngine.ts    # Core deterministic engine
+│   │   │   ├── algorithms/            # Per-algorithm simulator implementations
+│   │   │   ├── hooks/                 # React hooks for engine integration
+│   │   │   └── components/            # Simulator-specific UI components
 │   │   ├── lib/
 │   │   │   └── utils.ts        # Tailwind merge & utility functions
 │   │   ├── App.tsx             # React Router configuration
 │   │   ├── main.tsx            # React DOM entry point
 │   │   └── index.css           # Global Tailwind v4 styles
-│   ├── package.json            # React, Vite, Tailwind, Recharts, Framer Motion
-│   └── vite.config.ts          # Vite bundler config
+│   ├── package.json
+│   └── vite.config.ts
 │
 ├── backend/
 │   ├── src/
 │   │   ├── config/             # Environment and Logger setup
 │   │   ├── controllers/        # HTTP Handlers
-│   │   │   ├── client.controller.ts
-│   │   │   ├── dashboard.controller.ts
-│   │   │   └── rateLimit.controller.ts
+│   │   ├── middleware/         # Admin authentication middleware
 │   │   ├── routes/             # Express Routers
-│   │   │   ├── api.routes.ts
-│   │   │   ├── client.routes.ts
-│   │   │   ├── dashboard.routes.ts
-│   │   │   └── rateLimit.routes.ts    # Global sandbox rate-limit middlewares
-│   │   ├── services/           # Core Business Logic & Algorithms
-│   │   │   ├── client.service.ts
-│   │   │   ├── dashboard.service.ts
-│   │   │   ├── tokenBucketRateLimiter.service.ts
-│   │   │   ├── inMemoryTokenBucketRateLimiter.service.ts
-│   │   │   ├── fixedWindowRateLimiter.service.ts
-│   │   │   ├── inMemoryFixedWindowRateLimiter.service.ts
-│   │   │   ├── slidingWindowRateLimiter.service.ts
-│   │   │   ├── inMemorySlidingWindowRateLimiter.service.ts
-│   │   │   ├── slidingLogRateLimiter.service.ts
-│   │   │   ├── inMemorySlidingLogRateLimiter.service.ts
-│   │   │   ├── leakyBucketRateLimiter.service.ts
-│   │   │   └── inMemoryLeakyBucketRateLimiter.service.ts
-│   │   └── index.ts            # Express Server & Socket.IO initialization
+│   │   └── services/           # Core Business Logic & Algorithm Implementations
 │   ├── prisma/
 │   │   └── schema.prisma       # PostgreSQL Database Models
-│   ├── tests/                  # Robust TypeScript Load Testing Suite
-│   │   ├── loadTest.ts         # Token Bucket Suite
-│   │   ├── fixedWindowLoadTest.ts
-│   │   ├── slidingWindowLoadTest.ts
-│   │   ├── slidingLogLoadTest.ts
-│   │   └── leakyBucketLoadTest.ts
-│   ├── package.json            # Node, Express, Prisma, Socket.io
-│   └── tsconfig.json           # Backend TS Compiler Options
+│   ├── tests/                  # TypeScript Load Testing Suite
+│   ├── package.json
+│   └── tsconfig.json
 │
-├── README.md                   # You are here!
-├── CHANGELOG.md                # Detailed release notes
-└── .gitignore
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # Automated lint & build checks
+│
+└── README.md
 ```
 
 ---
@@ -296,22 +290,51 @@ LimitLab/
 ## Getting Started
 
 ### Prerequisites
-- Node.js (v18+)
+- Node.js (v20+)
 - PostgreSQL Database (Local or Supabase)
 
 ### Backend Setup
-1. `cd backend`
-2. `npm install`
-3. Copy `.env.example` to `.env` and set your `DATABASE_URL` and `DIRECT_URL`.
-4. `npx prisma generate`
-5. `npx prisma db push`
-6. `npm run dev`
+```bash
+cd backend
+npm install
+cp .env.example .env          # Set DATABASE_URL and DIRECT_URL
+npx prisma generate
+npx prisma db push
+npm run dev
+```
 
 ### Frontend Setup
-1. `cd frontend`
-2. `npm install`
-3. Copy `.env.example` to `.env` and set `VITE_API_URL=http://localhost:3001/api/v1`.
-4. `npm run dev`
+```bash
+cd frontend
+npm install
+cp .env.example .env          # Set VITE_API_URL=http://localhost:3001/api/v1
+npm run dev
+```
 
 ---
-*Built for API Engineers & Architects.*
+
+## API Endpoint Security
+
+| Endpoint Group | CORS | Rate Limit | Auth |
+|---|---|---|---|
+| `/health` | Open | None | None |
+| `/api/v1/clients` | Strict (Vercel origin only) | 100 req / 15 min | Admin Key for create/delete |
+| `/api/v1/stats/dashboard` | Strict (Vercel origin only) | 100 req / 15 min | None |
+| `/api/v1/rate-limit/*` | Open (sandbox) | 500 req/s burst + 3000 req/15min sustained | None |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite, Tailwind CSS v4, Recharts, Framer Motion |
+| Backend | Node.js, Express.js, TypeScript |
+| ORM | Prisma 6 |
+| Database | PostgreSQL (Supabase) |
+| Deployment | Vercel (Frontend), AWS EC2 + Nginx + PM2 (Backend) |
+| CI/CD | GitHub Actions |
+
+---
+
+<p align="center"><em>Built for API Engineers and Architects.</em></p>
