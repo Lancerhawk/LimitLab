@@ -2,6 +2,20 @@
 
 All notable changes to LimitLab will be documented in this file.
 
+## [1.1.0] - 2026-07-23
+### Added
+- Redesigned the Dashboard into a comprehensive, developer-focused Home page (`/homepage`).
+- Built a 7-section layout on the new Home page to explain algorithms, features, sandbox limits, and provide a clear starting point.
+- Rebuilt the Sidebar navigation from scratch, providing smoother mobile and desktop transitions (removed generic collapse strip in favor of a clean slide-in overlay).
+- Integrated the LimitLab logo properly into the Sidebar and mobile Top Navbar.
+
+### Changed
+- Re-routed the base path `/dashboard` to `/homepage` and removed obsolete SaaS dashboard widgets.
+
+### Fixed
+- Fixed algorithm badge text overflow wrapping on the Clients page.
+- Fixed responsive squishing issue on the Simulator Timeline legend on smaller screens.
+
 ## [1.0.0] - 2026-07-13
 ### Added
 - Official v1.0.0 Release!

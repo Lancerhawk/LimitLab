@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/FRONTEND-blueviolet?style=flat-square" alt="Frontend" />
-  <img src="https://img.shields.io/badge/V1.0.0-blue?style=flat-square" alt="V1.0.0" />
+  <img src="https://img.shields.io/badge/V1.1.0-blue?style=flat-square" alt="V1.1.0" />
   <img src="https://img.shields.io/badge/BACKEND-green?style=flat-square" alt="Backend" />
   <img src="https://img.shields.io/badge/V1.0.0-brightgreen?style=flat-square" alt="V1.0.0" />
   <img src="https://img.shields.io/badge/PRISMA%20%26%20POSTGRESQL-2D3748?style=flat-square&logo=prisma&logoColor=white" alt="Prisma & PostgreSQL" />
@@ -250,7 +250,7 @@ LimitLab/
 │   │   │   └── dashboard/      # Custom dashboard visualizations
 │   │   ├── pages/              # Main routing views
 │   │   │   ├── ClientDetailsPage.tsx  # Interactive sandbox, script generation, real-time UI sync
-│   │   │   ├── DashboardPage.tsx      # Global statistics overview
+│   │   │   ├── HomePage.tsx           # Developer landing page & algorithm overview
 │   │   │   └── SimulatorPage.tsx      # Visual drag-and-drop deterministic simulation
 │   │   ├── simulation/         # Pure client-side simulation engine
 │   │   │   ├── simulationEngine.ts    # Core deterministic engine
