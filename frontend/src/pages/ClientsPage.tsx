@@ -254,12 +254,10 @@ const ClientsPage = () => {
         <CardContent className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="pr-2">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-lg">{client.name}</h3>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'LEAKY_BUCKET' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : algo === 'SLIDING_LOG' ? 'bg-teal-500/10 text-teal-500 border-teal-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                  {isTokenBucket ? 'Token Bucket' : algo === 'LEAKY_BUCKET' ? 'Leaky Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : algo === 'SLIDING_LOG' ? 'Sliding Log' : 'Fixed Window'}
-                </span>
-              </div>
+              <h3 className="font-semibold text-lg">{client.name}</h3>
+              <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap mt-1.5 ${isTokenBucket ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : algo === 'LEAKY_BUCKET' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : algo === 'SLIDING_WINDOW' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : algo === 'SLIDING_LOG' ? 'bg-teal-500/10 text-teal-500 border-teal-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                {isTokenBucket ? 'Token Bucket' : algo === 'LEAKY_BUCKET' ? 'Leaky Bucket' : algo === 'SLIDING_WINDOW' ? 'Sliding Window' : algo === 'SLIDING_LOG' ? 'Sliding Log' : 'Fixed Window'}
+              </span>
               {client.description && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{client.description}</p>}
             </div>
             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity -mr-2 -mt-2">

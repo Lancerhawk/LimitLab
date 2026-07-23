@@ -114,13 +114,13 @@ TrafficLayer.displayName = 'TrafficLayer';
 
 
 const TimelineLegend = React.memo(() => (
-  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+  <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between text-xs text-muted-foreground">
     <div className="flex gap-4">
       <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-muted-foreground/60" /> Pending</span>
       <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Accepted</span>
       <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-destructive" /> Rejected</span>
     </div>
-    <div>Click timeline to add • Double-click or Right-click to remove • Drag to move</div>
+    <div className="text-muted-foreground/60">Click timeline to add • Double-click or Right-click to remove • Drag to move</div>
   </div>
 ));
 TimelineLegend.displayName = 'TimelineLegend';

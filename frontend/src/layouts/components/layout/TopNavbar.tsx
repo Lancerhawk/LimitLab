@@ -13,10 +13,10 @@ export const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         <Button variant="ghost" size="icon" className="md:hidden text-muted-foreground hover:text-foreground" onClick={onMenuClick}>
           <Menu className="h-5 w-5" />
         </Button>
+        <img src="/logo.png" alt="LimitLab" className="w-6 h-6 md:hidden" />
         <span className="text-sm font-semibold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent md:hidden">LimitLab</span>
       </div>
-      
-      {/* Intentionally left blank for ultra-minimalist UI */}
+
       <div></div>
     </header>
   );
